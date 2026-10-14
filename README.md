@@ -32,6 +32,19 @@ Instagram is built to keep you scrolling, and Android's own tools don't help muc
 
 ReelRein sits next to Instagram and fixes all four. It has **no internet permission at all**, so nothing it sees can leave your phone.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/pause-screen.png" alt="Pause screen: breathing ring, today's opens, time on reels and reels, and the Set a limit card with a 1 to 50 minute ruler"></td>
+<td width="50%"><img src="docs/images/home.png" alt="ReelRein home: protection status, today's time on reels, reels, time in Instagram and opens, and a 7-day chart"></td>
+</tr>
+<tr>
+<td><sub><b>Pause screen:</b> breathe, see today's numbers, then set a limit or close Instagram.</sub></td>
+<td><sub><b>Home:</b> protection status, today at a glance, the last 7 days.</sub></td>
+</tr>
+</table>
+
 ## Highlights
 
 | | |
