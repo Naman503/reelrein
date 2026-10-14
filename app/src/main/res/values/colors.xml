@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Used by the overlays drawn over Instagram (plain Views). Compose screens use ui/Theme.kt. -->
+    <color name="rr_bg_top">#FF0D0E19</color>
+    <color name="rr_bg_bottom">#FF1C1645</color>
+    <color name="rr_accent">#FF8E90FF</color>
+    <color name="rr_accent_2">#FFC08CFF</color>
+    <color name="rr_text">#FFF2F2FA</color>
+    <color name="rr_text_dim">#B3E6E6F2</color>
+    <color name="rr_pill_bg">#E6141526</color>
+</resources>

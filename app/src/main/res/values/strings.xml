@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ReelRein</string>
+    <string name="a11y_description">ReelRein notices when Instagram opens to show a pause screen, counts the Reels you swipe through, and can hold the 2x speed press for you. It reads only screen events and view IDs, never text, captions or messages. Everything stays on this phone: the app has no internet permission.</string>
+</resources>

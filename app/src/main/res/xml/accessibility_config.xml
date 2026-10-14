@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Baseline: only window changes (app switches), which are rare and cheap.
+  Scroll/click events are switched on at runtime only while Instagram is in front
+  (see ReelReinService.setListening).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/a11y_description"
+    android:notificationTimeout="100"
+    android:settingsActivity="com.naman.reelrein.MainActivity" />
