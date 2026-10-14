@@ -56,7 +56,10 @@ jobs:
           if "$TOOLS/aapt2" dump permissions "$APK" | grep -q "android.permission.INTERNET"; then
             echo "::error::The APK requests INTERNET"; exit 1
           fi
-          (cd "$(dirname "$APK")" && sha256sum "$(basename "$APK")" > "$(basename "$APK").sha256")
+          # Stable name, so https://github.com/Naman503/reelrein/releases/latest/download/ReelRein.apk
+          # always gets the newest release.
+          cp "$APK" ReelRein.apk
+          sha256sum ReelRein.apk > ReelRein.apk.sha256
 
       - name: Publish release
         env:
@@ -65,4 +68,4 @@ jobs:
           NOTES="docs/releases/$GITHUB_REF_NAME.md"
           ARGS=(--title "ReelRein ${GITHUB_REF_NAME#v}")
           if [ -f "$NOTES" ]; then ARGS+=(--notes-file "$NOTES"); else ARGS+=(--generate-notes); fi
-          gh release create "$GITHUB_REF_NAME" app/build/outputs/apk/release/*.apk app/build/outputs/apk/release/*.apk.sha256 "${ARGS[@]}"
+          gh release create "$GITHUB_REF_NAME" ReelRein.apk ReelRein.apk.sha256 "${ARGS[@]}"

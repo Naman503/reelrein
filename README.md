@@ -4,24 +4,54 @@
 
 # ReelRein
 
-**Instagram on your terms: a breath and a time limit before Instagram opens, a live counter of the time you spend on Reels, and every reel at 2× without touching the screen.**
+**Instagram on your terms.**<br>
+A breath and a time limit before Instagram opens, a live counter of your time on Reels,<br>and every reel at 2× without touching the screen.
 
 [![CI](https://github.com/Naman503/reelrein/actions/workflows/ci.yml/badge.svg)](https://github.com/Naman503/reelrein/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Naman503/reelrein?color=8E90FF)](https://github.com/Naman503/reelrein/releases)
+[![Downloads](https://img.shields.io/github/downloads/Naman503/reelrein/total?color=8E90FF)](https://github.com/Naman503/reelrein/releases)
 ![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.4-7F52FF?logo=kotlin&logoColor=white)
 ![No internet permission](https://img.shields.io/badge/internet-none-22C55E)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-<img src="docs/images/pause-screen.png" width="300" alt="ReelRein's pause screen over Instagram: a breathing ring, today's opens, time on reels and reel count, and a 'Set a limit' card with a 1 to 50 minute ruler, Continue and Close Instagram">
+<br>
 
-**[⬇️ Download the latest APK](https://github.com/Naman503/reelrein/releases/latest)**
+## ⬇️ Download
+
+<a href="https://github.com/Naman503/reelrein/releases/latest/download/ReelRein.apk"><img src="docs/images/badge-github.png" height="72" alt="Get it on GitHub: download the latest ReelRein APK"></a>
+&nbsp;
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.naman.reelrein%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FNaman503%2Freelrein%22%2C%22author%22%3A%22Naman503%22%2C%22name%22%3A%22ReelRein%22%7D"><img src="docs/images/badge-obtainium.png" height="72" alt="Get it on Obtainium: install and get automatic updates"></a>
+
+[![Download APK](https://img.shields.io/github/v/release/Naman503/reelrein?label=Download%20APK&logo=android&logoColor=white&color=3DDC84&style=for-the-badge)](https://github.com/Naman503/reelrein/releases/latest/download/ReelRein.apk)
+
+<sub>**ReelRein.apk** · about 1 MB · Android 8.0+ · signed release build · [all versions & checksums](https://github.com/Naman503/reelrein/releases)</sub>
+
+<sub>**GitHub** downloads the APK directly. **[Obtainium](https://github.com/ImranR98/Obtainium)** installs it and tells you when there's an update.</sub>
+
+<br>
+
+<img src="docs/images/pause-screen.png" width="280" alt="ReelRein's pause screen over Instagram: a breathing ring, today's opens, time on reels and reel count, and a 'Set a limit' card with a 1 to 50 minute ruler">
 
 </div>
 
 ---
 
-## Why
+## 🚀 Install in 4 steps
+
+| | Step | Where |
+|:-:|---|---|
+| **1** | **Download and open** `ReelRein.apk`. Allow your browser to install apps when asked. Play Protect may warn about an unknown developer: **More details → Install anyway**. | the badge above |
+| **2** | **Turn on accessibility:** Finish setup → **Open** → Installed apps → ReelRein → **On**.<br><sub>Switch greyed out? Settings → Apps → ReelRein → **⋮ → Allow restricted settings**, then try again.</sub> | ReelRein app |
+| **3** | **Allow background running** so the phone doesn't switch ReelRein off (setup card → **Allow**). | ReelRein app |
+| **4** | **Open Instagram.** You'll see the pause screen. 🎉 | Instagram |
+
+<sub>Vivo / iQOO, Xiaomi, Oppo, Samsung and others kill background apps. See [Keep it running](#-keep-it-running) if ReelRein turns itself off.</sub>
+
+## 📑 Contents
+
+[Why](#-why) · [Screenshots](#-screenshots) · [Highlights](#-highlights) · [Features](#-features-in-detail) · [Keep it running](#-keep-it-running) · [Bank-safe mode](#bank-safe-mode-optional) · [Permissions](#-permissions) · [Privacy](#-privacy) · [How it works](#-how-it-works) · [Limits](#-compatibility-and-limits) · [Build](#-build-from-source)
+
+## 💡 Why
 
 Instagram is built to keep you scrolling, and Android's own tools don't help much:
 
@@ -32,7 +62,7 @@ Instagram is built to keep you scrolling, and Android's own tools don't help muc
 
 ReelRein sits next to Instagram and fixes all four. It has **no internet permission at all**, so nothing it sees can leave your phone.
 
-## Screenshots
+## 📸 Screenshots
 
 <table>
 <tr>
@@ -45,7 +75,7 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 </tr>
 </table>
 
-## Highlights
+## ✨ Highlights
 
 | | |
 |---|---|
@@ -60,7 +90,7 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 | 🔒 **Private by design** | No internet permission, no accounts, no analytics. Daily totals only. It never reads captions, comments, usernames or messages. |
 | 🔋 **Light** | While Instagram is closed it only listens for app switches. Scroll tracking runs only while Instagram is in front. The APK is about 1 MB. |
 
-## Features in detail
+## 🧩 Features in detail
 
 ### Pause before Instagram opens
 - Breathing ring with "Breathe in / Breathe out", timed on the real clock. Your phone's animation-speed setting can't shorten it.
@@ -114,47 +144,41 @@ Some banking apps refuse to open while *any* accessibility service is on. Androi
 
 The trade-off: Instagram may be visible for about a second before the pause screen covers it.
 
-## Install
-
-1. **Download** `ReelRein-x.y.z-release.apk` from [Releases](https://github.com/Naman503/reelrein/releases/latest) and open it. Allow "install unknown apps" for your browser or file manager when asked. Play Protect may warn about an unknown developer; choose **Install anyway**.
-2. **Open ReelRein → Finish setup → Turn on accessibility → ReelRein → On.**
-   If the switch is greyed out ("Restricted setting"), go to **Settings → Apps → ReelRein → ⋮ → Allow restricted settings**, then try again. Android does this for every app installed outside the Play Store.
-3. **Allow background running** (the setup card has a button), so your phone doesn't switch ReelRein off.
-4. **Open Instagram.** You'll get the pause screen.
-
-<details>
-<summary><b>Phones that kill background apps (vivo / iQOO, Xiaomi, Oppo, Realme, Samsung)</b></summary>
-
-- **Battery:** Settings → Battery → Background power consumption (or "App battery saver") → ReelRein → **Allow / No restrictions**
-- **Autostart:** Settings → Apps → Autostart → ReelRein **on**
-- **Recents:** pull down on ReelRein's card (or tap its lock icon) so "Clear all" leaves it alone
-- **Advanced Protection:** Android 17's Advanced Protection mode turns off accessibility apps that aren't screen readers, so leave it off
-
-See [dontkillmyapp.com](https://dontkillmyapp.com) for your brand.
-</details>
-
-<details>
-<summary><b>Turning on bank-safe mode</b></summary>
-
-It needs two one-time permissions:
+**Setup:** two one-time permissions.
 
 1. **Usage access**, to notice Instagram opening: ReelRein → Banking apps → **Grant**.
-2. **Permission to switch its own accessibility on and off.** Only a computer can grant this, once:
+2. **Permission to switch its own accessibility on and off.** Only a computer can grant this, once (USB debugging on):
    ```bash
    adb shell pm grant com.naman.reelrein android.permission.WRITE_SECURE_SETTINGS
    ```
-   ReelRein uses it only to add or remove **its own** entry in the enabled accessibility services. You can take it back any time with `pm revoke`, or by uninstalling.
+   ReelRein uses it only to add or remove **its own** entry in the enabled accessibility services. You can take it back with `pm revoke`, or by uninstalling.
 
 Then switch on **Only run while Instagram is open**.
-</details>
+
+## 🔋 Keep it running
+
+Some phones stop background apps to save battery, and that switches ReelRein's accessibility service off. Fix it once:
+
+| | |
+|---|---|
+| 🔋 **Battery** | Settings → Battery → Background power consumption / App battery saver → ReelRein → **Allow / No restrictions** |
+| 🚀 **Autostart** | Settings → Apps → Autostart → ReelRein **on** (vivo / iQOO, Xiaomi, Oppo) |
+| 📌 **Recents** | Pull down on ReelRein's card (or tap its 🔒 lock) so "Clear all" leaves it alone |
+| 🛡️ **Advanced Protection** | Android 17's Advanced Protection turns off accessibility apps that aren't screen readers, so keep it off |
+
+More per-brand tips: [dontkillmyapp.com](https://dontkillmyapp.com).
 
 <details>
-<summary><b>Updating, and moving from a self-built (debug) version</b></summary>
+<summary><b>🔄 Updating, and moving from a self-built version</b></summary>
 
-New releases install over the old one and keep your settings and stats. A version you built yourself with `installDebug` is signed with a different key, so uninstall it once before installing the release APK. That resets your stats. You'll also need to turn accessibility on again, and re-grant `WRITE_SECURE_SETTINGS` if you use bank-safe mode.
+- **Updates:** a new APK installs over the old one and keeps your settings and stats (Obtainium does this for you).
+- **Self-built version:** one you installed with `./gradlew installDebug` is signed with a different key, so **uninstall it once** before installing the release.
+  - That resets your stats, and you'll need to turn accessibility on again.
+  - If you use bank-safe mode, re-grant `WRITE_SECURE_SETTINGS`.
+- **Checksum:** each release lists the SHA-256 of `ReelRein.apk`, and its signing certificate fingerprint is `DF:AF:E1:9C:DA:5F:94:7A:75:F2:2C:C9:B8:47:C5:06:49:95:11:56:CE:9C:6D:71:F1:DB:85:67:4E:FC:2D:22`.
 </details>
 
-## Permissions
+## 🔐 Permissions
 
 | Permission | Why | Needed? |
 |---|---|---|
@@ -165,7 +189,7 @@ New releases install over the old one and keep your settings and stats. A versio
 | Notifications | Bank-safe mode's small "waiting for Instagram" notification | Bank-safe only |
 | **Internet** | **Not requested.** It's removed from the manifest, and CI fails if it ever appears | Never |
 
-## Privacy
+## 🔒 Privacy
 
 - **Nothing leaves the phone.** There's no internet permission, so it can't send anything anywhere.
 - **What it looks at:**
@@ -176,7 +200,7 @@ New releases install over the old one and keep your settings and stats. A versio
 - **What it stores:** daily totals only (opens, reels, time in Instagram, time on Reels) and your settings, in app-private storage. Backups are off.
 - **Debug log** (off by default): logs window and view IDs, never text, to logcat and a small private file.
 
-## How it works
+## 🔍 How it works
 
 ```
 LaunchWatcher (bank-safe only) ──switches on──▶ ReelReinService (AccessibilityService)
@@ -194,7 +218,7 @@ LaunchWatcher (bank-safe only) ──switches on──▶ ReelReinService (Acces
 
 More background: [docs/RESEARCH.md](docs/RESEARCH.md) (how One Sec, ScrollToll and others do it) and [docs/PLAN.md](docs/PLAN.md).
 
-## Compatibility and limits
+## 🚧 Compatibility and limits
 
 - **Tested on:** Instagram 450 (English) on an iQOO Z7 Pro, Android 15 / Funtouch OS 15. Needs Android 8.0+.
 - **English only for 2× and Auto scroll:** they rely on Instagram's English labels. Counting, limits and the pill work in any language.
@@ -202,7 +226,7 @@ More background: [docs/RESEARCH.md](docs/RESEARCH.md) (how One Sec, ScrollToll a
 - **Instagram updates can move things.** Turn on **Debug log**, check the IDs and labels, and adjust [`IgSignatures.kt`](app/src/main/java/com/naman/reelrein/IgSignatures.kt).
 - Not affiliated with Instagram or Meta. ReelRein never logs in, never talks to Instagram's servers and only acts on what's on your screen.
 
-## Build from source
+## 🔨 Build from source
 
 Requirements: JDK 17, Android SDK with platform 37 (Android Studio installs it).
 
@@ -222,9 +246,9 @@ Release builds are signed with the key in a git-ignored `keystore.properties` (`
 3. The [Release workflow](.github/workflows/release.yml) then:
    - builds the APK, signed with the key from repository secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`);
    - checks it isn't debug-signed and has no internet permission;
-   - publishes the GitHub release with the APK and its SHA-256.
+   - publishes the GitHub release with `ReelRein.apk` (a stable name, so `releases/latest/download/ReelRein.apk` always gets the newest) and its SHA-256.
 
-## Project layout
+## 📂 Project layout
 
 ```
 app/src/main/java/com/naman/reelrein/
@@ -241,6 +265,6 @@ app/src/main/java/com/naman/reelrein/
 └─ ui/                  Compose settings screen, theme, pill customiser
 ```
 
-## License
+## 📄 License
 
 [MIT](LICENSE) © 2026 Naman
