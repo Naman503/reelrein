@@ -30,7 +30,7 @@ A breath and a time limit before Instagram opens, a live counter of your time on
 
 <br>
 
-<img src="docs/images/pause-screen.png" width="280" alt="ReelRein's pause screen over Instagram: a breathing ring, today's opens, time on reels and reel count, and a 'Set a limit' card with a 1 to 50 minute ruler">
+<img src="docs/images/attempts.png" width="260" alt="ReelRein's pause screen over Instagram: a big number of attempts to open Instagram in the last 24 hours, with I don't want to open Instagram and Continue on Instagram">
 
 </div>
 
@@ -66,14 +66,20 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/pause-screen.png" alt="Pause screen: breathing ring, today's opens, time on reels and reels, and the Set a limit card with a 1 to 50 minute ruler"></td>
-<td width="50%"><img src="docs/images/home.png" alt="ReelRein home: protection status, today's time on reels, reels, time in Instagram and opens, and a 7-day chart"></td>
+<td width="25%"><img src="docs/images/breathe.png" alt="Step 1: an hourglass drains while you take a deep breath"></td>
+<td width="25%"><img src="docs/images/attempts.png" alt="Step 2: how many times you tried to open Instagram in the last 24 hours, with I don't want to open Instagram and Continue on Instagram"></td>
+<td width="25%"><img src="docs/images/dial.png" alt="Step 3: a round dial to choose how many minutes, then Open Instagram for 18 min"></td>
+<td width="25%"><img src="docs/images/times-up.png" alt="Time's up: a full hourglass, time on reels and reels watched, Close Instagram or Continue after a countdown"></td>
 </tr>
 <tr>
-<td><sub><b>Pause screen:</b> breathe, see today's numbers, then set a limit or close Instagram.</sub></td>
-<td><sub><b>Home:</b> protection status, today at a glance, the last 7 days.</sub></td>
+<td><sub><b>1. Breathe</b> while the hourglass drains.</sub></td>
+<td><sub><b>2. Attempts</b> in the last 24 hours. Closing is the easy choice.</sub></td>
+<td><sub><b>3. How long?</b> Drag the dial, then open.</sub></td>
+<td><sub><b>Time's up:</b> close, or choose a new time.</sub></td>
 </tr>
 </table>
+
+<p align="center"><img src="docs/images/home.png" width="300" alt="ReelRein home: protection status, today's time on reels, reels, time in Instagram and opens, and a 7-day chart"><br><sub><b>Home:</b> protection status, today at a glance, the last 7 days.</sub></p>
 
 ## ✨ Highlights
 
@@ -264,7 +270,7 @@ app/src/main/java/com/naman/reelrein/
 ├─ AudioGate.kt         mutes Instagram under the pause screen
 ├─ IgSignatures.kt      every Instagram-specific ID and label
 ├─ Store.kt             settings keys, pill config, daily stats
-├─ overlay/             pause / time's-up screens, breathing ring, time ruler, pill + panel
+├─ overlay/             pause / time's-up screens, hourglass, time dial, pill + panel
 └─ ui/                  Compose settings screen, theme, pill customiser
 ```
 
