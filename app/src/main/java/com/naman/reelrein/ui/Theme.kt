@@ -8,36 +8,39 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-val Accent = Color(0xFF8E90FF)
-val Accent2 = Color(0xFFC08CFF)
-val AccentBrush = Brush.linearGradient(listOf(Color(0xFF6C6EF5), Color(0xFFA35BF5)))
-val Good = Color(0xFF3DD6A3)
-val Warn = Color(0xFFFFB454)
+val Accent = Color(0xFF9896EC)
+val Accent2 = Color(0xFFC2B5F2)
+val Lavender = Color(0xFFC8C5F7)
+val LavenderInk = Color(0xFF2D2A72)
+val AccentBrush = Brush.linearGradient(listOf(Color(0xFF8583DE), Color(0xFFB4A6EE)))
+val Good = Color(0xFF7FD8B5)
+val Warn = Color(0xFFF2C08A)
 
+// One Sec-like calm palette: soft lavender on near-black with a warm undertone.
 private val Dark = darkColorScheme(
-    primary = Accent,
-    onPrimary = Color(0xFF16174D),
-    primaryContainer = Color(0xFF2B2C6B),
-    onPrimaryContainer = Color(0xFFE0E0FF),
+    primary = Lavender,
+    onPrimary = LavenderInk,
+    primaryContainer = Color(0xFF3A3880),
+    onPrimaryContainer = Color(0xFFE4E2FF),
     secondary = Accent2,
-    background = Color(0xFF0D0E19),
-    onBackground = Color(0xFFE8E8F4),
-    surface = Color(0xFF0D0E19),
-    onSurface = Color(0xFFE8E8F4),
-    surfaceVariant = Color(0xFF22243A),
-    onSurfaceVariant = Color(0xFFA4A7C4),
-    surfaceContainerLowest = Color(0xFF0A0B14),
-    surfaceContainerLow = Color(0xFF131423),
-    surfaceContainer = Color(0xFF171829),
-    surfaceContainerHigh = Color(0xFF1E2033),
-    surfaceContainerHighest = Color(0xFF26283E),
-    outline = Color(0xFF4A4D6B),
-    outlineVariant = Color(0xFF2A2C44),
-    error = Color(0xFFFF7A85),
+    background = Color(0xFF16171A),
+    onBackground = Color(0xFFF1F0F6),
+    surface = Color(0xFF16171A),
+    onSurface = Color(0xFFF1F0F6),
+    surfaceVariant = Color(0xFF26272C),
+    onSurfaceVariant = Color(0xFFA9A8B6),
+    surfaceContainerLowest = Color(0xFF111214),
+    surfaceContainerLow = Color(0xFF1B1C20),
+    surfaceContainer = Color(0xFF1F2024),
+    surfaceContainerHigh = Color(0xFF26272C),
+    surfaceContainerHighest = Color(0xFF2E2F35),
+    outline = Color(0xFF4B4C57),
+    outlineVariant = Color(0xFF2C2D33),
+    error = Color(0xFFFF8A8F),
 )
 
 private val Light = lightColorScheme(
-    primary = Color(0xFF5557E0),
+    primary = Color(0xFF5B58C9),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFE1E0FF),
     onPrimaryContainer = Color(0xFF15166B),

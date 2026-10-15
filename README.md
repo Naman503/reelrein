@@ -79,8 +79,8 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 
 | | |
 |---|---|
-| 🌬️ **Pause before opening** | A short breathing ring every time Instagram opens. It can get longer with each open today. Shows how many times you've opened it today and how long you've spent on Reels. |
-| ⏱️ **A limit you choose** | Drag a ruler from 1 to 50 minutes (or tap 5 / 10 / 15 / 30). When time's up you either close Instagram or choose a new limit. There's no "just 5 more" button. |
+| 🌬️ **Pause before opening** | An hourglass and a breath every time Instagram opens, then how many times you've tried to open it in the last 24 hours. It can get longer with each open today. Shows how many times you've opened it today and how long you've spent on Reels. |
+| ⏱️ **A limit you choose** | Turn a round dial from 1 to 50 minutes (or tap 5 / 10 / 15 / 30). When time's up you either close Instagram or choose a new limit. There's no "just 5 more" button. |
 | 🎬 **Live counter pill** | Time spent on Reels and reels watched, floating over Instagram. The ring fills as your limit runs out and turns amber in the last minute. |
 | 🎛️ **Control panel** | Tap the pill for session and today stats, a 1× / 2× switch, Auto scroll, Change limit, Hide pill and End session. |
 | 🎨 **Fully customisable** | Choose which numbers the pill shows, its size, style (solid / glass / outline), how far it fades when idle, what a tap does and which panel sections appear. There's a live preview in the app. |
@@ -93,15 +93,18 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 ## 🧩 Features in detail
 
 ### Pause before Instagram opens
-- Breathing ring with "Breathe in / Breathe out", timed on the real clock. Your phone's animation-speed setting can't shorten it.
-- Pause length 3–20 s. With **Longer each time** on, every open today adds 3 s, up to 30 s.
-- While it's up, Instagram is fully covered and muted.
-- Then **Set a limit**: drag the 1–50 min ruler (a haptic tick per minute) or tap a quick pick. ReelRein remembers your last choice.
-- Coming back within 2 minutes (a share sheet, a notification, a quick app switch) continues the same session without another pause.
+A calm, One Sec-style flow, one step at a time:
+1. **Breathe.** An hourglass drains while you take a breath ("Breathe in… / Breathe out…"). It runs 3–20 s; with **Longer each time** on, every open today adds 3 s, up to 30 s. The timing follows the real clock, so your phone's animation speed can't shorten it.
+2. **Attempts.** A big number: how many times you've tried to open Instagram in the last 24 hours, with your time and reels on Reels today. **I don't want to open Instagram** is the main button. **Continue on Instagram** is a quiet link.
+3. **How much time do you need?** Drag the round dial (1–50 min, a haptic tick per minute) or tap 5 / 10 / 15 / 30, then **Open Instagram for N min**. It remembers your last choice.
+
+While these screens are up, Instagram is fully covered and silent.
+
+**Pause again after closing Instagram for:** right away, 10 s (default), 30 s, 1, 2 or 5 min. Coming back sooner continues the same session, which is handy for share sheets and links. Coming back later means a new pause.
 
 ### Time's up
-- Shows what the session cost: time on Reels, reels watched and today's total.
-- **Close Instagram**, or **Continue** after a 3-second beat with a new limit. Continuing always means choosing how long.
+- A finished hourglass and what the session cost: time on Reels and reels watched.
+- **Close Instagram**, or **Continue on Instagram** after a 3-second countdown, which takes you to the time dial. Continuing always means choosing how long.
 
 ### Counter pill and panel
 - The pill shows time on Reels this session, reels this session and the 2× status. Optional extras: reels today, time on Reels today and time left.

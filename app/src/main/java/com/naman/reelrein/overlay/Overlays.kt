@@ -33,7 +33,7 @@ import com.naman.reelrein.IgSignatures
 import com.naman.reelrein.R
 import kotlin.math.abs
 
-data class PauseInfo(val openNumber: Int, val timeToday: String, val reelTimeToday: String, val reelsToday: Int)
+data class PauseInfo(val openNumber: Int, val attempts24h: Int, val timeToday: String, val reelTimeToday: String, val reelsToday: Int)
 
 data class TimesUpInfo(val sessionReelTime: String, val sessionReels: Int, val sessionTime: String, val reelTimeToday: String)
 
@@ -82,6 +82,9 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     private val textDim = service.getColor(R.color.rr_text_dim)
     private val warn = Color.parseColor("#FFB454")
     private val base = Color.parseColor("#FF0A0B12")
+    private val lavender = service.getColor(R.color.rr_lavender)
+    private val lavenderDeep = service.getColor(R.color.rr_lavender_deep)
+    private val lavenderInk = service.getColor(R.color.rr_lavender_ink)
     private val ink = Color.parseColor("#FF0B0C14")
 
     private var fullView: View? = null
@@ -94,8 +97,15 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     val fullShowing get() = fullView != null
     val hudShowing get() = hud != null
 
-    // ---------------- Pause screen ----------------
+    // ---------------- Pause screen: breathe -> attempts -> dial ----------------
 
+    /**
+     * One Sec-style flow, one calm step at a time:
+     *  1. an hourglass drains while you breathe;
+     *  2. "N attempts to open Instagram within the last 24 hours", with
+     *     "I don't want to open Instagram" as the main button and "Continue on Instagram" quiet;
+     *  3. a dial to choose how long, then "Open Instagram for N min".
+     */
     fun showPause(
         seconds: Int,
         info: PauseInfo,
@@ -104,160 +114,206 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         onClose: () -> Unit,
     ) {
         val (root, content) = screen("Paused")
+        val stage = FrameLayout(ctx)
+        content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, TOP_WEIGHT))
-        val breath = BreathView(ctx, accent, accent2)
-        content.addView(breath, centered(dp(164), dp(164)))
+        // 1. breathe
+        val breathe = column()
+        breathe.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
+        val glass = HourglassView(ctx)
+        breathe.addView(glass, centered(dp(150), dp(230)))
+        breathe.addView(text("Take a deep breath", 26f, textColor, bold = true).apply { setPadding(0, dp(36), 0, dp(10)) }, centered())
+        val prompt = text("Breathe in…", 17f, textDim)
+        breathe.addView(prompt, centered())
+        breathe.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1.3f))
+        stage.addView(breathe, FrameLayout.LayoutParams(-1, -1))
 
-        val title = text("Take a breath", 26f, textColor, bold = true).apply { setPadding(0, dp(18), 0, dp(6)) }
-        content.addView(title, centered())
-        val subtitle = text("Instagram will be here in a moment.", 14f, textDim)
-        content.addView(subtitle, centered())
+        // alternate the prompt every 4 s while the glass drains
+        var inhale = true
+        val swap = object : Runnable {
+            override fun run() {
+                if (fullView !== root || breathe.parent == null) return
+                inhale = !inhale
+                prompt.animate().alpha(0f).setDuration(200).withEndAction {
+                    prompt.text = if (inhale) "Breathe in…" else "Breathe out…"
+                    prompt.animate().alpha(1f).setDuration(300).start()
+                }.start()
+                root.postDelayed(this, 4_000)
+            }
+        }
 
-        content.addView(statsRow(
-            ordinal(info.openNumber) to "Open today",
-            info.reelTimeToday to "On reels today",
-            info.reelsToday.toString() to "Reels today",
-        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, MID_WEIGHT))
-
-        val picker = limitCard(initialMinutes, enabled = false, onStart = onStart, closeLabel = "Close Instagram", onClose = onClose)
-        content.addView(picker.view, LinearLayout.LayoutParams(-1, -2))
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, BOTTOM_WEIGHT))
-
-        breath.onFinished = {
-            title.text = "Still want to go in?"
-            subtitle.text = "Set a limit. You'll get a nudge when it's up."
-            picker.setEnabled(true)
+        glass.onFinished = {
+            swapStage(stage, attemptsStage(
+                number = info.attempts24h,
+                label = if (info.attempts24h == 1) "attempt to open Instagram within the last 24 hours." else "attempts to open Instagram within the last 24 hours.",
+                detail = "${info.reelTimeToday} on Reels today · ${info.reelsToday} ${if (info.reelsToday == 1) "reel" else "reels"}",
+                primary = "I don't want to open Instagram",
+                onPrimary = onClose,
+                secondary = "Continue on Instagram",
+                secondaryLockMs = 0,
+                onSecondary = {
+                    swapStage(stage, dialStage(initialMinutes, "How much time do you need?", onStart, "Never mind, close Instagram", onClose))
+                },
+            ))
         }
         showFull(root, content)
-        breath.start(seconds * 1_000L)
+        glass.start(seconds * 1_000L)
+        root.postDelayed(swap, 4_000)
     }
 
     // ---------------- Time's up / change limit ----------------
 
     fun showTimesUp(info: TimesUpInfo, initialMinutes: Int, onStart: (minutes: Int) -> Unit, onClose: () -> Unit) {
-        limitScreen(
-            status = "Time's up",
-            title = "Time's up",
-            subtitle = "${info.sessionReels} ${if (info.sessionReels == 1) "reel" else "reels"} in ${info.sessionReelTime}. Stop here, or set a new limit.",
-            info = info,
-            initialMinutes = initialMinutes,
-            lockMs = TIMES_UP_LOCK_MS,
-            closeLabel = "Close Instagram",
-            closeIcon = R.drawable.ic_home,
-            onStart = onStart,
-            onClose = onClose,
-        )
+        val (root, content) = screen("Time's up")
+        val stage = FrameLayout(ctx)
+        content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
+        swapStage(stage, timesUpStage(info, onClose) {
+            swapStage(stage, dialStage(initialMinutes, "How much more time?", onStart, "Close Instagram", onClose))
+        }, animate = false)
+        showFull(root, content)
     }
 
     /** From the panel: pick a new limit mid-session (counted from now). */
     fun showChangeLimit(info: TimesUpInfo, initialMinutes: Int, onStart: (minutes: Int) -> Unit, onCancel: () -> Unit) {
-        limitScreen(
-            status = "Session",
-            title = "Change your limit",
-            subtitle = "So far: ${info.sessionReels} ${if (info.sessionReels == 1) "reel" else "reels"} in ${info.sessionReelTime}. The new limit starts now.",
-            info = info,
-            initialMinutes = initialMinutes,
-            lockMs = 0,
-            closeLabel = "Keep my current limit",
-            closeIcon = R.drawable.ic_close,
-            onStart = onStart,
-            onClose = onCancel,
-        )
-    }
-
-    private fun limitScreen(
-        status: String,
-        title: String,
-        subtitle: String,
-        info: TimesUpInfo,
-        initialMinutes: Int,
-        lockMs: Long,
-        closeLabel: String,
-        closeIcon: Int,
-        onStart: (Int) -> Unit,
-        onClose: () -> Unit,
-    ) {
-        val (root, content) = screen(status)
-
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, TOP_WEIGHT))
-        val ring = BreathView(ctx, accent, accent2).apply {
-            fixedProgress = 1f
-            centerIcon = tinted(R.drawable.ic_timer, Color.WHITE)
-        }
-        content.addView(ring, centered(dp(120), dp(120)))
-        content.addView(text(title, 28f, textColor, bold = true).apply { setPadding(0, dp(18), 0, dp(6)) }, centered())
-        content.addView(text(subtitle, 14f, textDim), centered())
-        content.addView(statsRow(
-            info.sessionReelTime to "On reels",
-            info.sessionReels.toString() to "Reels",
-            info.reelTimeToday to "Reels today",
-        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, MID_WEIGHT))
-
-        // On time's up, a short beat before "continue" works, so it's a choice rather than a reflex.
-        val picker = limitCard(initialMinutes, enabled = lockMs <= 0, onStart = onStart, closeLabel = closeLabel, closeIcon = closeIcon, onClose = onClose)
-        content.addView(picker.view, LinearLayout.LayoutParams(-1, -2))
-        content.addView(spacer(), LinearLayout.LayoutParams(-1, 0, BOTTOM_WEIGHT))
+        val (root, content) = screen("Session")
+        val stage = FrameLayout(ctx)
+        content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
+        swapStage(stage, dialStage(initialMinutes, "Change your limit", onStart, "Keep my current limit", onCancel,
+            subtitle = "So far: ${info.sessionReels} ${if (info.sessionReels == 1) "reel" else "reels"} in ${info.sessionReelTime}. The new limit starts now."), animate = false)
         showFull(root, content)
-        if (lockMs > 0) root.postDelayed({ if (fullView === root) picker.setEnabled(true) }, lockMs)
     }
 
-    private class LimitCard(val view: View, val setEnabled: (Boolean) -> Unit)
+    private fun timesUpStage(info: TimesUpInfo, onClose: () -> Unit, onContinue: () -> Unit): View {
+        val v = column()
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.8f))
+        v.addView(HourglassView(ctx).apply { fixedProgress = 1f }, centered(dp(96), dp(148)))
+        v.addView(text("Time's up", 34f, textColor, bold = true).apply { setPadding(0, dp(28), 0, dp(12)) }, centered())
+        v.addView(text(
+            "You spent ${info.sessionReelTime} on Reels and watched ${info.sessionReels} ${if (info.sessionReels == 1) "reel" else "reels"}.",
+            17f, textDim,
+        ).apply { setPadding(dp(12), 0, dp(12), 0) }, centered())
+        v.addView(text("${info.reelTimeToday} on Reels today", 14f, textDim).apply { setPadding(0, dp(8), 0, 0); alpha = 0.8f }, centered())
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
+        addActions(v, "Close Instagram", onClose, "Continue on Instagram", secondaryLockMs = TIMES_UP_LOCK_MS, onSecondary = onContinue)
+        return v
+    }
 
-    /** "Set a limit" card: big number, drag ruler, quick picks, Continue + a way out. */
-    private fun limitCard(
+    private fun attemptsStage(
+        number: Int,
+        label: String,
+        detail: String,
+        primary: String,
+        onPrimary: () -> Unit,
+        secondary: String,
+        secondaryLockMs: Long,
+        onSecondary: () -> Unit,
+    ): View {
+        val v = column()
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.55f))
+        v.addView(text("$number", 92f, textColor, bold = true).apply { tabular(); includeFontPadding = true }, centered())
+        v.addView(text(label, 19f, textColor).apply { setPadding(dp(16), dp(4), dp(16), dp(14)) }, centered())
+        v.addView(text(detail, 14f, textDim), centered())
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
+        addActions(v, primary, onPrimary, secondary, secondaryLockMs, onSecondary)
+        return v
+    }
+
+    private fun dialStage(
         initial: Int,
-        enabled: Boolean,
+        title: String,
         onStart: (Int) -> Unit,
-        closeLabel: String,
-        closeIcon: Int = R.drawable.ic_home,
-        onClose: () -> Unit,
-    ): LimitCard {
-        val card = card()
-        val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
-        head.addView(caps("Set a limit"), LinearLayout.LayoutParams(0, -2, 1f).apply { bottomMargin = dp(8) })
-        val big = text("$initial", 40f, textColor, bold = true).apply { tabular() }
-        head.addView(big)
-        head.addView(text(" min", 16f, textDim).apply { setPadding(0, 0, 0, dp(6)) })
-        card.addView(head, LinearLayout.LayoutParams(-1, -2))
-
-        val picks = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        val continueBtn = button("Continue for $initial min", R.drawable.ic_play_arrow, Style.ACCENT) {}
-        val ruler = TimeRuler(ctx, accent, accent2, initial).apply {
-            onChange = { v ->
-                big.text = "$v"
-                (continueBtn.getChildAt(1) as TextView).text = "Continue for $v min"
-            }
+        secondary: String,
+        onSecondary: () -> Unit,
+        subtitle: String? = null,
+    ): View {
+        val v = column()
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.45f))
+        v.addView(text(title, 26f, textColor, bold = true), centered())
+        if (subtitle != null) v.addView(text(subtitle, 14f, textDim).apply { setPadding(dp(16), dp(10), dp(16), 0) }, centered())
+        val primaryLabel = { m: Int -> "Open Instagram for $m min" }
+        lateinit var primaryText: TextView
+        val dial = ArcDial(ctx, lavenderDeep, lavender, initial).apply {
+            haptics = this@Overlays.haptics
+            onChange = { m -> primaryText.text = primaryLabel(m) }
         }
-        card.addView(ruler, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        v.addView(dial, centered(dp(280), dp(280)).apply { topMargin = dp(24) })
 
-        listOf(5, 10, 15, 30).forEachIndexed { i, m ->
-            picks.addView(chip("$m min") { ruler.set(m) }, LinearLayout.LayoutParams(0, dp(36), 1f).apply {
-                if (i > 0) marginStart = dp(8)
+        val picks = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        listOf(5, 10, 15, 30).forEach { m ->
+            picks.addView(chip("$m min") { dial.set(m) }, LinearLayout.LayoutParams(dp(68), dp(34)).apply {
+                marginStart = dp(4); marginEnd = dp(4)
             })
         }
-        card.addView(picks, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        v.addView(picks, centered().apply { topMargin = dp(8) })
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
+        val btn = primaryPill(primaryLabel(dial.value)) { onStart(dial.value) }
+        primaryText = btn
+        v.addView(btn, LinearLayout.LayoutParams(-1, dp(62)))
+        v.addView(quietLink(secondary) { onSecondary() }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(6) })
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.35f))
+        return v
+    }
 
-        pressable(continueBtn) { onStart(ruler.value) }
-        card.addView(continueBtn, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(16) })
-        card.addView(button(closeLabel, closeIcon, Style.WHITE) { onClose() }, LinearLayout.LayoutParams(-1, dp(52)).apply {
-            topMargin = dp(10)
-        })
-
-        val lockable = listOf<View>(ruler, picks, continueBtn)
-        val setEnabled = { on: Boolean ->
-            lockable.forEach { v ->
-                v.isEnabled = on
-                if (v is LinearLayout) for (i in 0 until v.childCount) v.getChildAt(i).isEnabled = on
-                v.animate().alpha(if (on) 1f else 0.32f).setDuration(200).start()
+    /** Big lavender pill + quiet text link underneath (One Sec's pattern), lifted off the bottom edge. */
+    private fun addActions(
+        v: LinearLayout,
+        primary: String,
+        onPrimary: () -> Unit,
+        secondary: String,
+        secondaryLockMs: Long,
+        onSecondary: () -> Unit,
+    ) {
+        v.addView(primaryPill(primary) { onPrimary() }, LinearLayout.LayoutParams(-1, dp(62)))
+        val link = quietLink(secondary) { onSecondary() }
+        v.addView(link, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(6) })
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.35f))
+        if (secondaryLockMs > 0) {
+            // A short beat before "continue" works, so it's a choice rather than a reflex.
+            link.isEnabled = false
+            link.alpha = 0.35f
+            var left = (secondaryLockMs / 1000).toInt()
+            link.text = "$secondary ($left)"
+            val tick = object : Runnable {
+                override fun run() {
+                    if (link.parent == null) return
+                    left--
+                    if (left > 0) {
+                        link.text = "$secondary ($left)"
+                        link.postDelayed(this, 1_000)
+                    } else {
+                        link.text = secondary
+                        link.isEnabled = true
+                        link.animate().alpha(1f).setDuration(200).start()
+                    }
+                }
             }
-            if (on) haptic(card, HapticFeedbackConstants.CONFIRM)
+            link.postDelayed(tick, 1_000)
         }
-        lockable.forEach { it.alpha = if (enabled) 1f else 0.32f }
-        if (!enabled) setEnabled(false)
-        return LimitCard(card, setEnabled)
+    }
+
+    private fun swapStage(stage: FrameLayout, next: View, animate: Boolean = true) {
+        val old = if (stage.childCount > 0) stage.getChildAt(0) else null
+        next.alpha = if (animate && old != null) 0f else 1f
+        stage.addView(next, FrameLayout.LayoutParams(-1, -1))
+        if (old != null) {
+            old.animate().alpha(0f).setDuration(realTime(180)).withEndAction { stage.removeView(old) }.start()
+            next.animate().alpha(1f).setStartDelay(realTime(120)).setDuration(realTime(260)).start()
+        }
+        haptic(stage, HapticFeedbackConstants.CONFIRM)
+    }
+
+    private fun column() = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+    }
+
+    private fun primaryPill(label: String, onClick: () -> Unit) = text(label, 17f, lavenderInk, bold = true).apply {
+        background = rounded(lavender, 31)
+        pressable(this, onClick)
+    }
+
+    private fun quietLink(label: String, onClick: () -> Unit) = text(label, 17f, textColor, bold = true).apply {
+        pressable(this, onClick)
     }
 
     fun hideFull() {
@@ -762,26 +818,20 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
 
     /** Full-screen root: opaque base, soft light blobs, header, and a padded content column. */
     private fun screen(status: String): Pair<FrameLayout, LinearLayout> {
+        // One Sec's calm look: a plain dark gradient, cool at the top, warm at the bottom.
         val root = FrameLayout(ctx).apply {
-            setBackgroundColor(base)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(service.getColor(R.color.rr_bg_top), service.getColor(R.color.rr_bg_mid), service.getColor(R.color.rr_bg_bottom)),
+            )
             isClickable = true // swallow touches so Instagram underneath can't be used
         }
-        root.addView(blob(accent, 150), FrameLayout.LayoutParams(dp(420), dp(420)).apply {
-            gravity = Gravity.TOP or Gravity.START
-            leftMargin = -dp(170)
-            topMargin = -dp(120)
-        })
-        root.addView(blob(accent2, 120), FrameLayout.LayoutParams(dp(460), dp(460)).apply {
-            gravity = Gravity.BOTTOM or Gravity.END
-            rightMargin = -dp(200)
-            bottomMargin = -dp(160)
-        })
 
         val content = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        val pad = dp(20)
+        val pad = dp(24)
         content.setPadding(pad, pad + dp(24), pad, pad + dp(8))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             root.setOnApplyWindowInsetsListener { _, insets ->
@@ -816,43 +866,6 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             setPadding(dp(10), dp(5), dp(10), dp(5))
             background = rounded(Color.argb(22, 255, 255, 255), 12)
         })
-    }
-
-    private fun blob(color: Int, alpha: Int) = View(ctx).apply {
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            gradientType = GradientDrawable.RADIAL_GRADIENT
-            gradientRadius = dp(210).toFloat()
-            colors = intArrayOf(withAlpha(color, alpha), Color.TRANSPARENT)
-        }
-        if (motion()) {
-            ObjectAnimator.ofFloat(this, View.TRANSLATION_Y, 0f, dp(36).toFloat()).apply {
-                duration = realTime(9_000)
-                repeatMode = ValueAnimator.REVERSE
-                repeatCount = ValueAnimator.INFINITE
-                fullAnimators += this
-                start()
-            }
-        }
-    }
-
-    private fun statsRow(vararg items: Pair<String, String>) = LinearLayout(ctx).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        items.forEachIndexed { i, (value, label) ->
-            if (i > 0) {
-                addView(View(ctx).apply { setBackgroundColor(Color.argb(30, 255, 255, 255)) }, LinearLayout.LayoutParams(dp(1), dp(30)))
-            }
-            addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                addView(text(value, 20f, textColor, bold = true).apply { tabular() })
-                addView(caps(label).apply {
-                    setPadding(0, dp(4), 0, 0)
-                    gravity = Gravity.CENTER
-                })
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-        }
     }
 
     private fun card() = LinearLayout(ctx).apply {

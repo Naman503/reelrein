@@ -22,6 +22,7 @@ object Keys {
     const val LOCK_DIRECTION = "lock_direction" // "down" or "up": which way the slide locks 2x
     const val LAST_MINUTES = "last_minutes"     // last limit picked on the pause / time's up screen
     const val AUTO_SCROLL = "auto_scroll"       // switch on Instagram's own Auto scroll each session
+    const val RELOCK_SECONDS = "relock_seconds" // away from Instagram this long -> pause screen again
     const val BANK_SAFE = "bank_safe"           // switch accessibility off whenever Instagram is closed
     const val DEBUG_LOG = "debug_log"
 
@@ -123,7 +124,21 @@ class StatsStore(ctx: Context) {
 
     private fun key(d: LocalDate, field: String) = "$d:$field"
 
-    fun addOpen() = addInt("opens", 1)
+    fun addOpen() {
+        addInt("opens", 1)
+        // Timestamps of recent opens, for "N attempts within the last 24 hours".
+        val now = System.currentTimeMillis()
+        val recent = openTimes().filter { now - it < DAY_MS } + now
+        p.edit().putString("open_times", recent.takeLast(500).joinToString(",")).apply()
+    }
+
+    fun opensLast24h(): Int {
+        val now = System.currentTimeMillis()
+        return openTimes().count { now - it < DAY_MS }
+    }
+
+    private fun openTimes(): List<Long> =
+        p.getString("open_times", "")!!.split(',').mapNotNull { it.toLongOrNull() }
     fun addReels(n: Int) = addInt("reels", n)
     /** Time with Instagram in front, and the part of it spent on Reels. */
     fun addTimeMs(ms: Long, reelMs: Long) {
@@ -146,6 +161,10 @@ class StatsStore(ctx: Context) {
     fun lastDays(n: Int): List<DayStat> {
         val today = LocalDate.now()
         return (0 until n).map { day(today.minusDays(it.toLong())) }
+    }
+
+    private companion object {
+        const val DAY_MS = 24 * 60 * 60 * 1000L
     }
 
     private fun addInt(field: String, n: Int) {

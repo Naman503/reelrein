@@ -150,7 +150,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         handler.removeCallbacks(tick)
         handler.post(tick)
 
-        if (state.session != null && now() - state.lastLeftAt < GRACE_MS) {
+        if (state.session != null && now() - state.lastLeftAt < relockMs()) {
             // Came back quickly (share sheet, notification, app switch): same session.
             overlays.ensureCancelPad()
             scheduleSurfaceCheck(500)
@@ -224,7 +224,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         speed.forget()
         overlays.showPause(
             seconds = seconds,
-            info = PauseInfo(day.opens, formatDuration(day.ms), formatDuration(day.reelMs), day.reels),
+            info = PauseInfo(day.opens, stats.opensLast24h(), formatDuration(day.ms), formatDuration(day.reelMs), day.reels),
             initialMinutes = lastMinutes(),
             onStart = { minutes ->
                 rememberMinutes(minutes)
@@ -263,6 +263,9 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         )
         refreshHud()
     }
+
+    /** How long you can be away from Instagram before the pause screen comes back (0 = always). */
+    private fun relockMs() = prefs.getInt(Keys.RELOCK_SECONDS, DEFAULT_RELOCK_S) * 1000L
 
     private fun lastMinutes() = prefs.getInt(Keys.LAST_MINUTES, 10)
 
@@ -642,7 +645,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         val day = stats.day()
         overlays.showPause(
             seconds = prefs.getInt(Keys.PAUSE_SECONDS, 5),
-            info = PauseInfo(day.opens + 1, formatDuration(day.ms), formatDuration(day.reelMs), day.reels),
+            info = PauseInfo(day.opens + 1, stats.opensLast24h() + 1, formatDuration(day.ms), formatDuration(day.reelMs), day.reels),
             initialMinutes = lastMinutes(),
             onStart = { overlays.hideFull() },
             onClose = { overlays.hideFull() },
@@ -737,7 +740,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         }
 
         private const val TAG = "ReelRein"
-        private const val GRACE_MS = 2 * 60_000L      // leave and come back within this = same session
+        const val DEFAULT_RELOCK_S = 10               // leave and come back within this = same session
         private const val SLEEP_AFTER_MS = 5_000L     // bank-safe: switch off this long after leaving
         private const val FLUSH_MS = 30_000L
         private const val SETTLE_MS = 300L            // quiet time after the last scroll before 2x

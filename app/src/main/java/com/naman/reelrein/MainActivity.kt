@@ -149,6 +149,7 @@ private fun HomeScreen(refreshKey: Int) {
         SectionCard("Before Instagram opens", R.drawable.ic_self_improvement) {
             PrefSwitchRow(prefs, Keys.INTERCEPT, true, R.drawable.ic_pause_circle, "Pause screen", "Breathe for a moment, then pick a time limit")
             PauseLengthChips(prefs)
+            RelockChips(prefs)
             PrefSwitchRow(prefs, Keys.ESCALATE, true, R.drawable.ic_trending_up, "Longer each time", "+3 s for every open today, up to 30 s")
             PreviewButtons(serviceOn, listOf("Pause screen" to Preview.PAUSE, "Time's up" to Preview.TIMES_UP))
         }
@@ -336,6 +337,31 @@ private fun PauseLengthChips(prefs: android.content.SharedPreferences) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun RelockChips(prefs: android.content.SharedPreferences) {
+    var secs by remember { mutableIntStateOf(prefs.getInt(Keys.RELOCK_SECONDS, ReelReinService.DEFAULT_RELOCK_S)) }
+    Column(Modifier.padding(start = 74.dp, end = 20.dp, top = 6.dp, bottom = 4.dp)) {
+        Text("Pause again after closing Instagram for", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0 to "Right away", 10 to "10 s", 30 to "30 s", 60 to "1 min", 120 to "2 min", 300 to "5 min").forEach { (s, label) ->
+                FilterChip(
+                    selected = secs == s,
+                    onClick = {
+                        secs = s
+                        prefs.edit().putInt(Keys.RELOCK_SECONDS, s).apply()
+                    },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Text(
+            if (secs == 0) "Every time you open Instagram, you get the pause screen." else "Coming back sooner continues the same session (handy for share sheets and links).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
