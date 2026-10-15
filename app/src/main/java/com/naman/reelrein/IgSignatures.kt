@@ -21,6 +21,15 @@ object IgSignatures {
     val TRANSIENT_PACKAGES = setOf("com.android.systemui", "android")
 
     /**
+     * Windows that show up with the home screen (Google Discover feed, vivo's control centre).
+     * While Instagram is parked behind the pause screen, these don't mean you left.
+     */
+    val LAUNCHER_COMPANIONS = setOf(
+        "com.google.android.googlequicksearchbox", "com.google.android.apps.nexuslauncher",
+        "com.vivo.upslide", "com.bbk.launcher2", "com.android.launcher3", "com.miui.home", "com.sec.android.app.launcher",
+    )
+
+    /**
      * Instagram's speed hint while a finger is held on a reel (no view ID, so matched by text,
      * case-insensitive). Seen on Instagram 450 in English:
      *   "Slide down to lock 2x speed"  -> not locked yet
