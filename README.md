@@ -104,7 +104,12 @@ A calm, One Sec-style flow, one step at a time:
 2. **Attempts.** A big number: how many times you've tried to open Instagram in the last 24 hours, with your time and reels on Reels today. **I don't want to open Instagram** is the main button. **Continue on Instagram** is a quiet link.
 3. **How much time do you need?** Drag the round dial (1–50 min, a haptic tick per minute) or tap 5 / 10 / 15 / 30, then **Open Instagram for N min**. It remembers your last choice.
 
-While these screens are up, Instagram is fully covered and silent.
+These screens open as a normal full-screen page on top of Instagram, not a lock over the whole phone:
+- **Phone keeps working:** Home, Back and the notification shade all work.
+- **Instagram stops:** it pauses itself underneath, so the reel stops, and it picks up where you left off when you choose a time.
+- **Leaving closes Instagram:** Back, **I don't want to open Instagram** or Home take you to the home screen and close Instagram.
+
+The attempts screen also shows today at a glance: time on Reels, reels watched, time in Instagram, opens, and how today compares with yesterday.
 
 **Pause again after closing Instagram for:** right away, 10 s (default), 30 s, 1, 2 or 5 min. Coming back sooner continues the same session, which is handy for share sheets and links. Coming back later means a new pause.
 

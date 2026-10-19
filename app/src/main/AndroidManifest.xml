@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- "Close Instagram" ends Instagram's background process too, so it's really closed. -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+
     <!-- To show Instagram's own icon on the pause screen. -->
     <queries>
         <package android:name="com.instagram.android" />
@@ -41,6 +44,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".overlay.GateActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:screenOrientation="portrait"
+            android:taskAffinity="com.naman.reelrein.gate"
+            android:theme="@style/Theme.ReelRein.Gate" />
 
         <service
             android:name=".LaunchWatcher"

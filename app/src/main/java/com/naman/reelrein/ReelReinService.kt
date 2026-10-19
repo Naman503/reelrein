@@ -13,6 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.naman.reelrein.SessionState.Session
+import com.naman.reelrein.overlay.Gate
 import com.naman.reelrein.overlay.HudActions
 import com.naman.reelrein.overlay.HudState
 import com.naman.reelrein.overlay.Overlays
@@ -63,7 +64,11 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         stats = StatsStore(this)
         audio = AudioGate(this)
         audio.restore() // in case a previous run was killed while Instagram was muted
-        overlays = Overlays(this, onFullShown = { audio.quiet() }, onFullHidden = { audio.restore() })
+        // No muting needed any more: Instagram pauses itself behind the pause screen.
+        overlays = Overlays(this, onFullShown = {}, onFullHidden = {})
+        Gate.onBack = { if (igInFront) closeInstagram() else overlays.hideFull() }
+        Gate.onLeave = { onGateLeft() }
+        Gate.log = { m -> debug { "gate: $m" } }
         speed = SpeedLock(
             this, handler,
             onLost = { onHoldLost() },
@@ -117,16 +122,9 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         when {
             pkg == IgSignatures.PACKAGE -> {
                 handler.removeCallbacks(verifyLeft)
-                if (revealPending) revealInstagram()
                 if (!igInFront) enterInstagram() else scheduleSurfaceCheck(400)
             }
             pkg == packageName || pkg in IgSignatures.TRANSIENT_PACKAGES || pkg == imePackage() -> Unit
-            // Instagram is parked in the background under our screen: the home screen showing
-            // behind it is expected. Anything else means you went somewhere else.
-            parked -> if (pkg != homePackage() && pkg !in IgSignatures.LAUNCHER_COMPANIONS) {
-                handler.removeCallbacks(verifyParked)
-                handler.postDelayed(verifyParked, 500)
-            }
             // Another app's window appeared. It may only be a popup or overlay on top of
             // Instagram (One Sec, chat heads, call screens), so check before treating it as leaving.
             igInFront -> {
@@ -174,6 +172,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     }
 
     private fun leaveInstagram() {
+        if (!igInFront) return
         accrue()
         flushTime()
         igInFront = false
@@ -231,16 +230,15 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         speed.forget()
         overlays.showPause(
             seconds = seconds,
-            info = PauseInfo(day.opens, stats.opensLast24h(), formatDuration(day.ms), formatDuration(day.reelMs), day.reels),
+            info = PauseInfo(day.opens, stats.opensLast24h(), formatDuration(day.ms), formatDuration(day.reelMs), day.reels, comparison()),
             initialMinutes = lastMinutes(),
             onStart = { minutes ->
                 rememberMinutes(minutes)
                 startSession(minutes * 60_000L)
-                resumeInstagram()
+                backToInstagram()
             },
             onClose = ::closeInstagram,
         )
-        parkInstagram()
         refreshHud()
     }
 
@@ -262,11 +260,10 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 rememberMinutes(minutes)
                 s.limitMs = s.usedMs + minutes * 60_000L
                 s.timesUpShown = false
-                resumeInstagram()
+                backToInstagram()
             },
             onClose = ::closeInstagram,
         )
-        parkInstagram()
         refreshHud()
     }
 
@@ -277,97 +274,70 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
     private fun rememberMinutes(m: Int) = prefs.edit().putInt(Keys.LAST_MINUTES, m).apply()
 
+    /**
+     * "Close Instagram" / "I don't want to open Instagram" / Back on the pause screen: go home,
+     * then end Instagram's background process so it's really closed, not just hidden.
+     */
     private fun closeInstagram() {
+        debug { "close Instagram" }
         overlays.hideFull()
         speed.forget()
         state.session = null
-        if (parked) {
-            parked = false
-            leaveInstagram() // already on the home screen
-        } else {
-            performGlobalAction(GLOBAL_ACTION_HOME)
-        }
-    }
-
-    // ---------------- parking Instagram under the pause / time's-up screens ----------------
-    //
-    // Muting isn't reliable everywhere (some phones and Bluetooth earbuds ignore it), so while
-    // a full-screen pause or time's-up screen is up, Instagram itself is sent to the background:
-    // a backgrounded Instagram stops the reel completely. Choosing a time brings it straight
-    // back to the same reel; "Close Instagram" just leaves you on the home screen.
-
-    private var parked = false
-    private var revealPending = false
-
-    private fun parkInstagram() {
-        if (parked) return
-        parked = true
-        handler.removeCallbacks(verifyLeft)
-        speed.forget()
         performGlobalAction(GLOBAL_ACTION_HOME)
+        killInstagramSoon()
     }
 
-    /** Bring Instagram back where it was; our screen lifts once it's in front. */
-    private fun resumeInstagram() {
-        if (!parked) {
-            overlays.hideFull()
-            afterReveal()
-            return
-        }
-        parked = false
-        revealPending = true
-        val launch = packageManager.getLaunchIntentForPackage(IgSignatures.PACKAGE)
-            ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (launch == null || runCatching { startActivity(launch) }.isFailure) {
-            revealInstagram()
-            return
-        }
-        handler.removeCallbacks(revealTimeout)
-        handler.postDelayed(revealTimeout, REVEAL_TIMEOUT_MS)
-    }
-
-    private val revealTimeout = Runnable { if (revealPending) revealInstagram() }
-
-    /** While parked: did you really switch to another app (not just the home screen's extras)? */
-    private val verifyParked = Runnable {
-        if (!parked) return@Runnable
-        val apps = runCatching { windows }.getOrNull().orEmpty()
-            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-        val top = (apps.firstOrNull { it.isActive } ?: apps.maxByOrNull { it.layer })?.root?.packageName?.toString()
-        if (top != null && top != homePackage() && top != packageName && top != IgSignatures.PACKAGE &&
-            top !in IgSignatures.LAUNCHER_COMPANIONS
-        ) {
-            debug { "left while parked ($top)" }
-            parked = false
-            leaveInstagram()
+    /**
+     * Android protects a just-used app for a while, so try now and again a minute later
+     * (skipped if you've gone back to Instagram in the meantime).
+     */
+    private fun killInstagramSoon() {
+        for (delay in listOf(KILL_DELAY_MS, KILL_RETRY_MS)) {
+            handler.postDelayed({
+                if (igInFront) return@postDelayed // you went back to Instagram
+                runCatching {
+                    getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(IgSignatures.PACKAGE)
+                }
+                debug { "asked Android to close Instagram's background process" }
+            }, delay)
         }
     }
 
-    private fun revealInstagram() {
-        revealPending = false
-        handler.removeCallbacks(revealTimeout)
-        handler.postDelayed({
-            overlays.hideFull()
-            afterReveal()
-        }, REVEAL_DELAY_MS) // let Instagram draw first, so the home screen never flashes
-    }
-
-    private fun afterReveal() {
+    /** "Open Instagram for N min" / Continue: our screen closes and Instagram resumes underneath. */
+    private fun backToInstagram() {
+        overlays.hideFull()
         lastTick = now()
         refreshHud()
-        scheduleSurfaceCheck(400)
+        scheduleSurfaceCheck(500)
         waitingForNextReel = false
-        scheduleEngage(SETTLE_MS)
+        scheduleEngage(SETTLE_MS + 300)
     }
 
-    private var home: String? = null
+    /** The pause screen was left with Home (or by switching apps): same as closing Instagram. */
+    private fun onGateLeft() {
+        if (!overlays.fullShowing) return
+        overlays.hideFull()
+        if (!igInFront) return // a preview from the settings screen
+        val s = state.session
+        if (s == null || s.timesUpShown) {
+            state.session = null
+            leaveInstagram()
+            killInstagramSoon()
+        }
+    }
 
-    private fun homePackage(): String? = home ?: runCatching {
-        packageManager.resolveActivity(
-            android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME),
-            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
-        )?.activityInfo?.packageName
-    }.getOrNull().also { home = it }
+    /** "12m less on Reels than yesterday so far" (compares with yesterday up to this time). */
+    private fun comparison(): String? {
+        val today = stats.day()
+        val yesterday = stats.day(java.time.LocalDate.now().minusDays(1))
+        if (yesterday.reelMs <= 0) return null
+        val diff = today.reelMs - yesterday.reelMs
+        return when {
+            diff <= -60_000 -> "${formatDuration(-diff)} less on Reels than all of yesterday"
+            diff >= 60_000 -> "${formatDuration(diff)} more on Reels than all of yesterday"
+            else -> "About the same time on Reels as yesterday"
+        }
+    }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -836,8 +806,8 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         private const val FLUSH_MS = 30_000L
         private const val SETTLE_MS = 300L            // quiet time after the last scroll before 2x
         private const val RETRY_MS = 400L
-        private const val REVEAL_DELAY_MS = 250L
-        private const val REVEAL_TIMEOUT_MS = 2_000L
+        private const val KILL_DELAY_MS = 1_200L
+        private const val KILL_RETRY_MS = 60_000L
         private const val LOCK_SLIDE_FRACTION = 0.14f // how far the lock gesture slides
         private const val ESCALATE_STEP_S = 3
         private const val MAX_PAUSE_S = 30

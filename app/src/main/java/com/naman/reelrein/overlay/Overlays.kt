@@ -33,7 +33,14 @@ import com.naman.reelrein.IgSignatures
 import com.naman.reelrein.R
 import kotlin.math.abs
 
-data class PauseInfo(val openNumber: Int, val attempts24h: Int, val timeToday: String, val reelTimeToday: String, val reelsToday: Int)
+data class PauseInfo(
+    val openNumber: Int,
+    val attempts24h: Int,
+    val timeToday: String,
+    val reelTimeToday: String,
+    val reelsToday: Int,
+    val comparison: String? = null, // e.g. "12m less on Reels than yesterday so far"
+)
 
 data class TimesUpInfo(val sessionReelTime: String, val sessionReels: Int, val sessionTime: String, val reelTimeToday: String)
 
@@ -119,6 +126,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
 
         // 1. breathe
         val breathe = column()
+        breathe.addView(stepDots(1), centered().apply { topMargin = dp(4) })
         breathe.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
         val glass = HourglassView(ctx)
         breathe.addView(glass, centered(dp(150), dp(230)))
@@ -146,13 +154,13 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             swapStage(stage, attemptsStage(
                 number = info.attempts24h,
                 label = if (info.attempts24h == 1) "attempt to open Instagram within the last 24 hours." else "attempts to open Instagram within the last 24 hours.",
-                detail = "${info.reelTimeToday} on Reels today · ${info.reelsToday} ${if (info.reelsToday == 1) "reel" else "reels"}",
+                info = info,
                 primary = "I don't want to open Instagram",
                 onPrimary = onClose,
                 secondary = "Continue on Instagram",
                 secondaryLockMs = 0,
                 onSecondary = {
-                    swapStage(stage, dialStage(initialMinutes, "How much time do you need?", onStart, "Never mind, close Instagram", onClose))
+                    swapStage(stage, dialStage(initialMinutes, "How much time do you need?", onStart, "Never mind, close Instagram", onClose, step = 3))
                 },
             ))
         }
@@ -201,7 +209,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     private fun attemptsStage(
         number: Int,
         label: String,
-        detail: String,
+        info: PauseInfo,
         primary: String,
         onPrimary: () -> Unit,
         secondary: String,
@@ -209,13 +217,55 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         onSecondary: () -> Unit,
     ): View {
         val v = column()
-        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.55f))
-        v.addView(text("$number", 92f, textColor, bold = true).apply { tabular(); includeFontPadding = true }, centered())
-        v.addView(text(label, 19f, textColor).apply { setPadding(dp(16), dp(4), dp(16), dp(14)) }, centered())
-        v.addView(text(detail, 14f, textDim), centered())
+        v.addView(stepDots(2), centered().apply { topMargin = dp(4) })
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.4f))
+        v.addView(text("$number", 88f, textColor, bold = true).apply { tabular(); includeFontPadding = true }, centered())
+        v.addView(text(label, 18f, textColor).apply { setPadding(dp(16), dp(2), dp(16), 0) }, centered())
+
+        // Today at a glance
+        val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        val row1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        val row2 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        row1.addView(statTile(R.drawable.ic_schedule, info.reelTimeToday, "on Reels today"), LinearLayout.LayoutParams(0, -2, 1f))
+        row1.addView(statTile(R.drawable.ic_movie, "${info.reelsToday}", "reels watched"), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+        row2.addView(statTile(R.drawable.ic_today, info.timeToday, "in Instagram today"), LinearLayout.LayoutParams(0, -2, 1f))
+        row2.addView(statTile(R.drawable.ic_login, "${info.openNumber}", "opens today"), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+        grid.addView(row1)
+        grid.addView(row2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        v.addView(grid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(28) })
+        if (info.comparison != null) {
+            v.addView(text(info.comparison, 14f, textDim).apply { setPadding(0, dp(14), 0, 0) }, centered())
+        }
+
         v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
         addActions(v, primary, onPrimary, secondary, secondaryLockMs, onSecondary)
         return v
+    }
+
+    private fun statTile(iconRes: Int, value: String, label: String) = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(14), dp(16), dp(14))
+        background = GradientDrawable().apply {
+            cornerRadius = dp(20).toFloat()
+            setColor(Color.argb(16, 255, 255, 255))
+            setStroke(dp(1), Color.argb(22, 255, 255, 255))
+        }
+        addView(icon(iconRes, lavender), LinearLayout.LayoutParams(dp(18), dp(18)))
+        addView(text(value, 22f, textColor, bold = true).apply { gravity = Gravity.START; tabular(); setPadding(0, dp(10), 0, dp(2)) })
+        addView(text(label, 12.5f, textDim).apply { gravity = Gravity.START })
+    }
+
+    /** Three small dots at the top of the pause flow: where you are (breathe · decide · time). */
+    private fun stepDots(step: Int) = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+        for (i in 1..3) {
+            addView(View(ctx).apply {
+                background = rounded(if (i == step) lavender else Color.argb(50, 255, 255, 255), 4)
+            }, LinearLayout.LayoutParams(if (i == step) dp(22) else dp(8), dp(8)).apply {
+                marginStart = dp(3); marginEnd = dp(3)
+            })
+        }
     }
 
     private fun dialStage(
@@ -225,8 +275,10 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         secondary: String,
         onSecondary: () -> Unit,
         subtitle: String? = null,
+        step: Int? = null,
     ): View {
         val v = column()
+        if (step != null) v.addView(stepDots(step), centered().apply { topMargin = dp(4) })
         v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.45f))
         v.addView(text(title, 26f, textColor, bold = true), centered())
         if (subtitle != null) v.addView(text(subtitle, 14f, textDim).apply { setPadding(dp(16), dp(10), dp(16), 0) }, centered())
@@ -319,36 +371,37 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     fun hideFull() {
         fullAnimators.forEach { it.cancel() }
         fullAnimators.clear()
-        val v = fullView ?: return
+        if (fullView == null) return
         fullView = null
-        runCatching { wm.removeView(v) }
+        Gate.close()
         onFullHidden()
     }
 
+    /**
+     * Full screens open as [GateActivity] on top of Instagram, not as a window above the whole
+     * phone: Home, Back and the notification shade keep working, and Instagram pauses itself.
+     */
     private fun showFull(root: View, content: View) {
         fullAnimators.forEach { it.cancel() }
         fullAnimators.clear()
-        fullView?.let { runCatching { wm.removeView(it) } }
-        fullView = null
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.OPAQUE, // nothing of Instagram shows through, not even during the fade
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
+        fullView = root
         content.alpha = 0f
         content.translationY = dp(14).toFloat()
-        runCatching { wm.addView(root, lp) }.onSuccess {
-            fullView = root
-            onFullShown()
-            content.animate().alpha(1f).translationY(0f).setDuration(realTime(320)).setInterpolator(DecelerateInterpolator()).start()
+        content.animate().alpha(1f).translationY(0f).setStartDelay(realTime(60)).setDuration(realTime(320))
+            .setInterpolator(DecelerateInterpolator()).start()
+        val open = Gate.current?.get()
+        if (open != null) {
+            open.show(root) // already up: swap the screen in place
+        } else {
+            Gate.pendingRoot = root
+            val intent = android.content.Intent(service, GateActivity::class.java).addFlags(
+                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                    android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                    android.content.Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+            )
+            runCatching { service.startActivity(intent) }
         }
+        onFullShown()
     }
 
     // ---------------- Counter pill + panel ----------------
