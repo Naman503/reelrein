@@ -28,6 +28,7 @@ object Keys {
     const val DEBUG_LOG = "debug_log"
 
     // Counter pill: what it shows and how it looks
+    const val PILL_BRAIN = "pill_brain"             // brain pal mascot at the start of the pill
     const val PILL_REEL_TIME = "pill_reel_time"     // time on reels this session
     const val PILL_REELS = "pill_reels"             // reels this session
     const val PILL_TODAY_REELS = "pill_today_reels" // "/ 148" today
@@ -56,7 +57,7 @@ object Keys {
 
     /** Every key that changes how the pill or panel is built. */
     val HUD_LAYOUT_KEYS = setOf(
-        PILL_REEL_TIME, PILL_REELS, PILL_TODAY_REELS, PILL_TODAY_TIME, PILL_TIME_LEFT, PILL_RING, PILL_SPEED,
+        PILL_BRAIN, PILL_REEL_TIME, PILL_REELS, PILL_TODAY_REELS, PILL_TODAY_TIME, PILL_TIME_LEFT, PILL_RING, PILL_SPEED,
         PILL_SIZE, PILL_STYLE, PILL_IDLE_ALPHA, PILL_TAP,
         PANEL_SESSION, PANEL_TODAY, PANEL_SPEED, PANEL_AUTO_SCROLL, PANEL_CHANGE_LIMIT, PANEL_HIDE, PANEL_END,
         HAPTICS,
@@ -65,6 +66,7 @@ object Keys {
 
 /** The counter pill + panel configuration, read from settings. */
 data class HudConfig(
+    val brain: Boolean,
     val reelTime: Boolean,
     val reels: Boolean,
     val todayReels: Boolean,
@@ -87,6 +89,7 @@ data class HudConfig(
 ) {
     companion object {
         fun from(p: SharedPreferences) = HudConfig(
+            brain = p.getBoolean(Keys.PILL_BRAIN, true),
             reelTime = p.getBoolean(Keys.PILL_REEL_TIME, true),
             reels = p.getBoolean(Keys.PILL_REELS, true),
             todayReels = p.getBoolean(Keys.PILL_TODAY_REELS, false),

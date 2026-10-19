@@ -112,6 +112,7 @@ fun PillSection(prefs: SharedPreferences, serviceOn: Boolean) {
         )
 
         ExpandableRow(R.drawable.ic_tune, "What the pill shows", "Pick the numbers you want at a glance") {
+            PrefSwitchRow(prefs, Keys.PILL_BRAIN, true, R.drawable.ic_self_improvement, "Brain pal", "The mascot at the start; its mood follows today's reels", onChange = bump)
             PrefSwitchRow(prefs, Keys.PILL_REEL_TIME, true, R.drawable.ic_schedule, "Time on reels", "This session", onChange = bump)
             PrefSwitchRow(prefs, Keys.PILL_RING, true, R.drawable.ic_timer, "Limit ring", "Fills as your limit is used, amber in the last minute", onChange = bump)
             PrefSwitchRow(prefs, Keys.PILL_REELS, true, R.drawable.ic_movie, "Reels this session", onChange = bump)
@@ -234,6 +235,11 @@ private fun PillMock(c: HudConfig, modifier: Modifier = Modifier) {
                 Spacer(Modifier.width((6 * k).dp))
             }
 
+            if (c.brain) {
+                groups++
+                BrainIcon(0, (34 * k).toInt())
+                Spacer(Modifier.width((4 * k).dp))
+            }
             if (c.reelTime) {
                 Divider()
                 if (c.ring) {

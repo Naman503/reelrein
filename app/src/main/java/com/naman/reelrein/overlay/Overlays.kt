@@ -475,6 +475,9 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         val speedChip: TextView?,
         val brain: BrainView?,
         val brainCount: TextView?,
+        val panelBrain: BrainView,
+        val moodTitle: TextView,
+        val moodSub: TextView,
         val panel: LinearLayout,
         val pReelTime: TextView?,
         val pReels: TextView?,
@@ -562,6 +565,12 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             groups++
         }
 
+        if (!brainStyle && config.brain) {
+            brain = BrainView(ctx)
+            pill.addView(brain, LinearLayout.LayoutParams(sdp(34), sdp(34)).apply { marginEnd = sdp(4) })
+            groups++
+        }
+
         var ring: MiniRing? = null
         var reelTime: TextView? = null
         if (brainStyle && config.reelTime) {
@@ -632,6 +641,25 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         }
         var first = true
         fun gap() = if (first) { first = false; 0 } else dp(14)
+
+        // Header: the brain pal and how it's doing today.
+        val panelBrain = BrainView(ctx)
+        val moodTitle = text("", 16f, textColor, bold = true).apply { gravity = Gravity.START }
+        val moodSub = text("", 12.5f, textDim).apply { gravity = Gravity.START }
+        panel.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(FrameLayout(ctx).apply {
+                background = rounded(Color.parseColor("#FFFBE7BF"), 16)
+                addView(panelBrain, FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(dp(54), dp(54)).apply { marginEnd = dp(12) })
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(moodTitle)
+                addView(moodSub)
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(-1, -2))
+        first = false
 
         var pReelTime: TextView? = null
         var pReels: TextView? = null
@@ -735,7 +763,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             if (panel.visibility != View.VISIBLE) pill.animate().alpha(config.idleAlpha).setDuration(realTime(400)).start()
         }
         val views = HudViews(
-            root, pill, config, ring, reelTime, todayTime, timeLeft, reels, todayReels, speedChip, brain, brainCount,
+            root, pill, config, ring, reelTime, todayTime, timeLeft, reels, todayReels, speedChip, brain, brainCount, panelBrain, moodTitle, moodSub,
             panel, pReelTime, pReels, pLeft, pLeftLabel, today, speedOff, speedOn, autoScroll, dim,
         )
         autoScroll?.setOnClickListener {
@@ -820,6 +848,9 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         h.state = s
         val brainStyle = h.config.style == "brain"
         h.brain?.mood = s.mood
+        h.panelBrain.mood = s.mood
+        h.moodTitle.text = listOf("Happy brain", "A bit tired", "Getting worried", "Brain is fried")[s.mood.coerceIn(0, 3)]
+        h.moodSub.text = "${s.todayReels} reels today · ${s.todayReelTime} on Reels"
         h.brainCount?.text = s.todayReels.toString()
         h.reelTime?.apply {
             text = s.reelTime
