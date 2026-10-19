@@ -88,6 +88,7 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 | 🌬️ **Pause before opening** | An hourglass and a breath every time Instagram opens, then how many times you've tried to open it in the last 24 hours. It can get longer with each open today. Shows how many times you've opened it today and how long you've spent on Reels. |
 | ⏱️ **A limit you choose** | Turn a round dial from 1 to 50 minutes (or tap 5 / 10 / 15 / 30). When time's up you either close Instagram or choose a new limit. There's no "just 5 more" button. |
 | 🎬 **Live counter pill** | Time spent on Reels and reels watched, floating over Instagram. The ring fills as your limit runs out and turns amber in the last minute. |
+| 🧠 **Brain pal** | A little brain on a cream pill counts today's reels and its mood follows them: happy, tired, worried, then fried. Set a **daily reel cap** and at the cap Instagram pauses with "Your brain is full". |
 | 🎛️ **Control panel** | Tap the pill for session and today stats, a 1× / 2× switch, Auto scroll, Change limit, Hide pill and End session. |
 | 🎨 **Fully customisable** | Choose which numbers the pill shows, its size, style (solid / glass / outline), how far it fades when idle, what a tap does and which panel sections appear. There's a live preview in the app. |
 | ⚡ **Every reel at 2×** | Uses Instagram's own "hold, slide down to lock 2×", once per reel. It waits for Instagram's hint before sliding, confirms the lock, skips ads, and never turns a press into a tap. |

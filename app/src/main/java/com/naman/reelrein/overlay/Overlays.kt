@@ -40,6 +40,7 @@ data class PauseInfo(
     val reelTimeToday: String,
     val reelsToday: Int,
     val comparison: String? = null, // e.g. "12m less on Reels than yesterday so far"
+    val mood: Int = 0,              // brain pal mood from today's reels
 )
 
 data class TimesUpInfo(val sessionReelTime: String, val sessionReels: Int, val sessionTime: String, val reelTimeToday: String)
@@ -57,6 +58,7 @@ data class HudState(
     val speed2x: Boolean?,        // null = speed lock off, true = 2x on now, false = 1x now
     val speedLockOn: Boolean,
     val autoScroll: Boolean,
+    val mood: Int = 0,             // brain pal mood, 0 happy .. 3 fried
 )
 
 interface HudActions {
@@ -92,6 +94,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     private val lavender = service.getColor(R.color.rr_lavender)
     private val lavenderDeep = service.getColor(R.color.rr_lavender_deep)
     private val lavenderInk = service.getColor(R.color.rr_lavender_ink)
+    private val brainInk = Color.parseColor("#FF5C3311")
     private val ink = Color.parseColor("#FF0B0C14")
 
     private var fullView: View? = null
@@ -181,6 +184,21 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         showFull(root, content)
     }
 
+    /** Daily reel cap reached: the brain pal is fried. Close, or keep watching after a beat. */
+    fun showBrainFull(reels: Int, cap: Int, info: TimesUpInfo, onClose: () -> Unit, onContinue: () -> Unit) {
+        val (root, content) = screen("Brain full")
+        val v = column()
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.6f))
+        v.addView(BrainView(ctx).apply { mood = 3 }, centered(dp(170), dp(170)))
+        v.addView(text("Your brain is full", 30f, textColor, bold = true).apply { setPadding(0, dp(22), 0, dp(10)) }, centered())
+        v.addView(text("That's $reels reels today. Your daily cap is $cap.", 17f, textDim).apply { setPadding(dp(12), 0, dp(12), 0) }, centered())
+        v.addView(text("${info.reelTimeToday} on Reels today", 14f, textDim).apply { setPadding(0, dp(8), 0, 0); alpha = 0.8f }, centered())
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 1f))
+        addActions(v, "Give my brain a break", onClose, "Keep watching", secondaryLockMs = BRAIN_LOCK_MS, onSecondary = onContinue)
+        content.addView(v, LinearLayout.LayoutParams(-1, 0, 1f))
+        showFull(root, content)
+    }
+
     /** From the panel: pick a new limit mid-session (counted from now). */
     fun showChangeLimit(info: TimesUpInfo, initialMinutes: Int, onStart: (minutes: Int) -> Unit, onCancel: () -> Unit) {
         val (root, content) = screen("Session")
@@ -218,8 +236,9 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     ): View {
         val v = column()
         v.addView(stepDots(2), centered().apply { topMargin = dp(4) })
-        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.4f))
-        v.addView(text("$number", 88f, textColor, bold = true).apply { tabular(); includeFontPadding = true }, centered())
+        v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.3f))
+        v.addView(BrainView(ctx).apply { mood = info.mood }, centered(dp(84), dp(84)))
+        v.addView(text("$number", 80f, textColor, bold = true).apply { tabular(); includeFontPadding = true }, centered())
         v.addView(text(label, 18f, textColor).apply { setPadding(dp(16), dp(2), dp(16), 0) }, centered())
 
         // Today at a glance
@@ -454,6 +473,8 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         val reels: TextView?,
         val todayReels: TextView?,
         val speedChip: TextView?,
+        val brain: BrainView?,
+        val brainCount: TextView?,
         val panel: LinearLayout,
         val pReelTime: TextView?,
         val pReels: TextView?,
@@ -488,6 +509,11 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             background = GradientDrawable().apply {
                 cornerRadius = sdp(26).toFloat()
                 when (config.style) {
+                    "brain" -> { // brain pal: warm cream pill
+                        cornerRadius = sdp(30).toFloat()
+                        setColor(Color.parseColor("#FFFBE7BF"))
+                        setStroke(dp(1), Color.argb(60, 160, 112, 46))
+                    }
                     "glass" -> {
                         setColor(Color.argb(140, 20, 20, 30))
                         setStroke(dp(1), Color.argb(70, 255, 255, 255))
@@ -518,9 +544,33 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             pill.addView(icon(res, color), LinearLayout.LayoutParams(sdp(size), sdp(size)).apply { marginEnd = sdp(6) })
         }
 
+        // Brain pal style: the brain mascot and today's reel count, like a little friend
+        // keeping score. (The time on reels can sit next to it; other items are for the
+        // classic styles.)
+        val brainStyle = config.style == "brain"
+        var brain: BrainView? = null
+        var brainCount: TextView? = null
+        if (brainStyle) {
+            pill.setPadding(sdp(8), sdp(6), sdp(16), sdp(6))
+            brain = BrainView(ctx)
+            pill.addView(brain, LinearLayout.LayoutParams(sdp(40), sdp(40)).apply { marginEnd = sdp(8) })
+            brainCount = text("0", 24f * k, brainInk, bold = true).apply {
+                tabular()
+                typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
+            }
+            pill.addView(brainCount)
+            groups++
+        }
+
         var ring: MiniRing? = null
         var reelTime: TextView? = null
-        if (config.reelTime) {
+        if (brainStyle && config.reelTime) {
+            pill.addView(View(ctx).apply { background = rounded(Color.argb(60, 92, 51, 17), 1) }, LinearLayout.LayoutParams(dp(1), sdp(20)).apply {
+                marginStart = sdp(11); marginEnd = sdp(11)
+            })
+            reelTime = pillText(16f, brainInk).also { pill.addView(it) }
+        }
+        if (config.reelTime && !brainStyle) {
             divider()
             if (config.ring) {
                 val box = FrameLayout(ctx)
@@ -534,20 +584,20 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             reelTime = pillText(17f).also { pill.addView(it) }
         }
         var todayTime: TextView? = null
-        if (config.todayTime) {
+        if (config.todayTime && !brainStyle) {
             divider()
             pillIcon(R.drawable.ic_today, textDim, 16)
             todayTime = pillText(15f, textDim, bold = false).also { pill.addView(it) }
         }
         var timeLeft: TextView? = null
-        if (config.timeLeft) {
+        if (config.timeLeft && !brainStyle) {
             divider()
             pillIcon(R.drawable.ic_timer, textColor, 17)
             timeLeft = pillText(16f).also { pill.addView(it) }
         }
         var reels: TextView? = null
         var todayReels: TextView? = null
-        if (config.reels || config.todayReels) {
+        if ((config.reels || config.todayReels) && !brainStyle) {
             divider()
             pillIcon(R.drawable.ic_movie, textColor, 18)
             if (config.reels) reels = pillText(17f).also { pill.addView(it) }
@@ -685,7 +735,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             if (panel.visibility != View.VISIBLE) pill.animate().alpha(config.idleAlpha).setDuration(realTime(400)).start()
         }
         val views = HudViews(
-            root, pill, config, ring, reelTime, todayTime, timeLeft, reels, todayReels, speedChip,
+            root, pill, config, ring, reelTime, todayTime, timeLeft, reels, todayReels, speedChip, brain, brainCount,
             panel, pReelTime, pReels, pLeft, pLeftLabel, today, speedOff, speedOn, autoScroll, dim,
         )
         autoScroll?.setOnClickListener {
@@ -768,9 +818,12 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     fun updateHud(s: HudState) {
         val h = hud ?: return
         h.state = s
+        val brainStyle = h.config.style == "brain"
+        h.brain?.mood = s.mood
+        h.brainCount?.text = s.todayReels.toString()
         h.reelTime?.apply {
             text = s.reelTime
-            setTextColor(if (s.warning && h.config.ring) warn else textColor)
+            setTextColor(if (brainStyle) brainInk else if (s.warning && h.config.ring) warn else textColor)
         }
         h.ring?.apply {
             fraction = s.usedFraction ?: 0f
@@ -798,6 +851,11 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
                 false -> {
                     chip.visibility = View.VISIBLE
                     chip.text = "1×"
+                    if (brainStyle) {
+                        chip.setTextColor(brainInk)
+                        chip.background = rounded(Color.argb(40, 92, 51, 17), 16)
+                        return@let
+                    }
                     chip.setTextColor(textDim)
                     chip.background = rounded(Color.argb(30, 255, 255, 255), 16)
                 }
@@ -1089,6 +1147,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     private companion object {
         const val IDLE_ALPHA = 0.8f
         const val TIMES_UP_LOCK_MS = 3_000L
+        const val BRAIN_LOCK_MS = 5_000L
 
         // Free space above the art, between stats and card, and below the card: the card
         // floats a little above the bottom edge instead of sitting on it.

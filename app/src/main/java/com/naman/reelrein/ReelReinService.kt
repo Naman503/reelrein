@@ -241,7 +241,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         speed.forget()
         overlays.showPause(
             seconds = seconds,
-            info = PauseInfo(day.opens, stats.opensLast24h(), formatDuration(day.ms), formatDuration(day.reelMs), day.reels, comparison()),
+            info = PauseInfo(day.opens, stats.opensLast24h(), formatDuration(day.ms), formatDuration(day.reelMs), day.reels, comparison(), brainMood()),
             initialMinutes = lastMinutes(),
             onStart = { minutes ->
                 rememberMinutes(minutes)
@@ -498,7 +498,38 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         s.reels++
         stats.addReels(1)
         refreshHud()
+        checkReelCap()
     }
+
+    /**
+     * Daily reel cap: at the cap (and every 25 reels after, if you keep going) the brain pal
+     * is "full" and Instagram pauses behind a screen saying so.
+     */
+    private fun checkReelCap() {
+        val cap = prefs.getInt(Keys.REEL_CAP, 0)
+        if (cap <= 0 || overlays.fullShowing) return
+        val today = stats.day()
+        val runtime = getSharedPreferences("runtime", MODE_PRIVATE)
+        val ackDay = runtime.getString("cap_ack_day", "")
+        val ackAt = if (ackDay == today.date.toString()) runtime.getInt("cap_ack_reels", 0) else 0
+        val next = if (ackAt > 0) ackAt + CAP_REMIND_EVERY else cap
+        if (today.reels < next) return
+        val s = state.session ?: return
+        speed.forget()
+        overlays.showBrainFull(
+            reels = today.reels,
+            cap = cap,
+            info = sessionInfo(s),
+            onClose = ::closeInstagram,
+            onContinue = {
+                runtime.edit().putString("cap_ack_day", today.date.toString()).putInt("cap_ack_reels", today.reels).apply()
+                backToInstagram()
+            },
+        )
+        refreshHud()
+    }
+
+    private fun brainMood(): Int = com.naman.reelrein.overlay.BrainView.moodFor(stats.day().reels, prefs.getInt(Keys.REEL_CAP, 0))
 
     private fun scheduleSurfaceCheck(delayMs: Long) {
         handler.removeCallbacks(surfaceCheck)
@@ -700,6 +731,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 speed2x = if (speedOn()) speed.active else null,
                 speedLockOn = speedOn(),
                 autoScroll = prefs.getBoolean(Keys.AUTO_SCROLL, false),
+                mood = brainMood(),
             ),
         )
     }
@@ -835,6 +867,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         private const val SETTLE_MS = 300L            // quiet time after the last scroll before 2x
         private const val RETRY_MS = 400L
         private const val KILL_DELAY_MS = 1_200L
+        private const val CAP_REMIND_EVERY = 25
         private const val COVER_SETTLE_MS = 450L
         private const val KILL_RETRY_MS = 60_000L
         private const val LOCK_SLIDE_FRACTION = 0.14f // how far the lock gesture slides

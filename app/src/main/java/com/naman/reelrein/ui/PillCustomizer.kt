@@ -124,7 +124,7 @@ fun PillSection(prefs: SharedPreferences, serviceOn: Boolean) {
         ExpandableRow(R.drawable.ic_visibility, "Look", "Size, style, fading, time format") {
             Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ChoiceRow(prefs, Keys.PILL_SIZE, "medium", "Size", listOf("small" to "Small", "medium" to "Medium", "large" to "Large"), bump)
-                ChoiceRow(prefs, Keys.PILL_STYLE, "solid", "Style", listOf("solid" to "Solid", "glass" to "Glass", "outline" to "Outline"), bump)
+                ChoiceRow(prefs, Keys.PILL_STYLE, "brain", "Style", listOf("brain" to "Brain pal", "solid" to "Solid", "glass" to "Glass", "outline" to "Outline"), bump)
                 var fade by remember { mutableFloatStateOf(prefs.getInt(Keys.PILL_IDLE_ALPHA, 80).toFloat()) }
                 Column {
                     Text(
@@ -198,6 +198,7 @@ private fun ChoiceRow(
 /** A Compose look-alike of the real pill, fed with sample numbers. */
 @Composable
 private fun PillMock(c: HudConfig, modifier: Modifier = Modifier) {
+    if (c.style == "brain") return BrainPillMock(c, modifier)
     val k = c.scale
     val bg = when (c.style) {
         "glass" -> Color(0x8C14141E)
@@ -293,5 +294,87 @@ private fun PillMock(c: HudConfig, modifier: Modifier = Modifier) {
             color = Color.White,
             fontSize = 11.sp,
         )
+    }
+}
+
+private val BrainCream = Color(0xFFFBE7BF)
+private val BrainInk = Color(0xFF5C3311)
+
+/** The brain pal pill: the real mascot (as a View) and a bold count on warm cream. */
+@Composable
+private fun BrainPillMock(c: HudConfig, modifier: Modifier = Modifier, mood: Int = 0, count: String = "14") {
+    val k = c.scale
+    Surface(modifier, shape = RoundedCornerShape((30 * k).dp), color = BrainCream, border = BorderStroke(1.dp, Color(0x3CA0702E)), shadowElevation = 6.dp) {
+        Row(Modifier.padding(start = (8 * k).dp, end = (16 * k).dp, top = (6 * k).dp, bottom = (6 * k).dp), verticalAlignment = Alignment.CenterVertically) {
+            BrainIcon(mood, (40 * k).toInt())
+            Spacer(Modifier.width((8 * k).dp))
+            Text(count, color = BrainInk, fontSize = (24 * k).sp, fontWeight = FontWeight.ExtraBold)
+            if (c.reelTime) {
+                Box(Modifier.padding(horizontal = (11 * k).dp).width(1.dp).height((20 * k).dp).background(BrainInk.copy(alpha = 0.25f)))
+                Text("7:42", color = BrainInk, fontSize = (16 * k).sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+fun BrainIcon(mood: Int, sizeDp: Int, modifier: Modifier = Modifier) {
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx -> com.naman.reelrein.overlay.BrainView(ctx) },
+        update = { it.mood = mood },
+        modifier = modifier.size(sizeDp.dp),
+    )
+}
+
+/** Brain pal: the four moods and the daily reel cap. */
+@Composable
+fun BrainSection(prefs: SharedPreferences, todayReels: Int) {
+    var cap by remember { mutableIntStateOf(prefs.getInt(Keys.REEL_CAP, 0)) }
+    val mood = com.naman.reelrein.overlay.BrainView.moodFor(todayReels, cap)
+    SectionCard("Brain pal", R.drawable.ic_self_improvement) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BrainIcon(mood, 64)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    listOf("Happy brain", "A bit tired", "Getting worried", "Brain is fried")[mood],
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "$todayReels reels today. Your brain pal's mood follows your reel count.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            listOf("Happy", "Tired", "Worried", "Fried").forEachIndexed { i, label ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    BrainIcon(i, 44, Modifier.alpha(if (i == mood) 1f else 0.55f))
+                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp)) {
+            Text("Daily reel cap", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "Off", 50 to "50", 100 to "100", 150 to "150", 200 to "200", 300 to "300").forEach { (v, label) ->
+                    FilterChip(
+                        selected = cap == v,
+                        onClick = {
+                            cap = v
+                            prefs.edit().putInt(Keys.REEL_CAP, v).apply()
+                        },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text(
+                if (cap == 0) "No cap. The brain still shows how your day is going." else "At $cap reels, Instagram pauses with \"Your brain is full\". You can keep going after a short wait; it checks in again every 25 reels.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

@@ -22,6 +22,7 @@ object Keys {
     const val LOCK_DIRECTION = "lock_direction" // "down" or "up": which way the slide locks 2x
     const val LAST_MINUTES = "last_minutes"     // last limit picked on the pause / time's up screen
     const val AUTO_SCROLL = "auto_scroll"       // switch on Instagram's own Auto scroll each session
+    const val REEL_CAP = "reel_cap"             // daily reel cap (0 = off): "your brain is full"
     const val RELOCK_SECONDS = "relock_seconds" // away from Instagram this long -> pause screen again
     const val BANK_SAFE = "bank_safe"           // switch accessibility off whenever Instagram is closed
     const val DEBUG_LOG = "debug_log"
@@ -98,7 +99,7 @@ data class HudConfig(
                 "large" -> 1.2f
                 else -> 1f
             },
-            style = p.getString(Keys.PILL_STYLE, "solid") ?: "solid",
+            style = p.getString(Keys.PILL_STYLE, "brain") ?: "brain",
             idleAlpha = p.getInt(Keys.PILL_IDLE_ALPHA, 80) / 100f,
             tap = p.getString(Keys.PILL_TAP, "panel") ?: "panel",
             panelSession = p.getBoolean(Keys.PANEL_SESSION, true),

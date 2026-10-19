@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A play button inside a time ring with a gap: playback, but on a limit. -->
+<!-- ReelRein's brain pal (our own mascot), happy mood. Same geometry as overlay/BrainView.kt. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:pathData="M54,33 A21,21 0 1,1 35.81,43.5"
-        android:strokeWidth="5"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeLineCap="round" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M49.5,45.2 C49.5,43.9 50.9,43.1 52,43.8 L63.4,52.3 C64.4,53 64.4,54.5 63.4,55.2 L52,63.7 C50.9,64.4 49.5,63.6 49.5,62.3 Z" />
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFC96D78" android:pathData="M26.81,47.40 a13.99,13.99 0 1,0 27.98,0 a13.99,13.99 0 1,0 -27.98,0 Z M38.69,41.46 a15.31,15.31 0 1,0 30.62,0 a15.31,15.31 0 1,0 -30.62,0 Z M53.21,47.40 a13.99,13.99 0 1,0 27.98,0 a13.99,13.99 0 1,0 -27.98,0 Z M24.17,59.28 a12.67,12.67 0 1,0 25.34,0 a12.67,12.67 0 1,0 -25.34,0 Z M58.49,59.28 a12.67,12.67 0 1,0 25.34,0 a12.67,12.67 0 1,0 -25.34,0 Z M33.41,64.56 a13.99,13.99 0 1,0 27.98,0 a13.99,13.99 0 1,0 -27.98,0 Z M46.61,64.56 a13.99,13.99 0 1,0 27.98,0 a13.99,13.99 0 1,0 -27.98,0 Z M35.39,55.32 a18.61,18.61 0 1,0 37.22,0 a18.61,18.61 0 1,0 -37.22,0 Z" />
+    <path android:fillColor="#FFF4A3A8" android:pathData="M28.26,47.40 a12.54,12.54 0 1,0 25.08,0 a12.54,12.54 0 1,0 -25.08,0 Z M40.14,41.46 a13.86,13.86 0 1,0 27.72,0 a13.86,13.86 0 1,0 -27.72,0 Z M54.66,47.40 a12.54,12.54 0 1,0 25.08,0 a12.54,12.54 0 1,0 -25.08,0 Z M25.62,59.28 a11.22,11.22 0 1,0 22.44,0 a11.22,11.22 0 1,0 -22.44,0 Z M59.94,59.28 a11.22,11.22 0 1,0 22.44,0 a11.22,11.22 0 1,0 -22.44,0 Z M34.86,64.56 a12.54,12.54 0 1,0 25.08,0 a12.54,12.54 0 1,0 -25.08,0 Z M48.06,64.56 a12.54,12.54 0 1,0 25.08,0 a12.54,12.54 0 1,0 -25.08,0 Z M36.84,55.32 a17.16,17.16 0 1,0 34.32,0 a17.16,17.16 0 1,0 -34.32,0 Z" />
+    <path android:strokeColor="#FFC96D78" android:strokeWidth="1.45" android:strokeLineCap="round" android:pathData="M54.00,32.88 Q51.36,38.16 54.66,42.12 M35.52,47.40 Q40.14,45.42 41.46,50.04 M72.48,47.40 Q67.86,45.42 66.54,50.04" />
+    <path android:fillColor="#6EFF788C" android:pathData="M36.51,61.92 a2.97,2.97 0 1,0 5.94,0 a2.97,2.97 0 1,0 -5.94,0 Z M65.55,61.92 a2.97,2.97 0 1,0 5.94,0 a2.97,2.97 0 1,0 -5.94,0 Z" />
+    <path android:fillColor="#FF1E1418" android:pathData="M40.47,55.32 a5.61,5.61 0 1,0 11.22,0 a5.61,5.61 0 1,0 -11.22,0 Z M56.31,55.32 a5.61,5.61 0 1,0 11.22,0 a5.61,5.61 0 1,0 -11.22,0 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42.52,53.34 a1.85,1.85 0 1,0 3.70,0 a1.85,1.85 0 1,0 -3.70,0 Z M47.07,56.90 a0.86,0.86 0 1,0 1.72,0 a0.86,0.86 0 1,0 -1.72,0 Z M58.36,53.34 a1.85,1.85 0 1,0 3.70,0 a1.85,1.85 0 1,0 -3.70,0 Z M62.91,56.90 a0.86,0.86 0 1,0 1.72,0 a0.86,0.86 0 1,0 -1.72,0 Z" />
+    <path android:strokeColor="#FF4A2E33" android:strokeWidth="1.72" android:strokeLineCap="round" android:pathData="M50.04,63.24 Q54.00,67.86 57.96,63.24" />
 </vector>

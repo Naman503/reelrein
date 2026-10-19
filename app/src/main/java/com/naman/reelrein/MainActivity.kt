@@ -73,6 +73,7 @@ import com.naman.reelrein.ui.ExpandableRow
 import com.naman.reelrein.ui.Good
 import com.naman.reelrein.ui.HoldPointPreview
 import com.naman.reelrein.ui.IconBadge
+import com.naman.reelrein.ui.BrainSection
 import com.naman.reelrein.ui.PillSection
 import com.naman.reelrein.ui.PrefSwitchRow
 import com.naman.reelrein.ui.ReelReinTheme
@@ -154,6 +155,8 @@ private fun HomeScreen(refreshKey: Int) {
             PreviewButtons(serviceOn, listOf("Pause screen" to Preview.PAUSE, "Time's up" to Preview.TIMES_UP))
         }
 
+        BrainSection(prefs, days.first().reels)
+
         PillSection(prefs, serviceOn)
 
         SectionCard("Playback", R.drawable.ic_fast_forward) {
@@ -193,10 +196,10 @@ private fun HomeScreen(refreshKey: Int) {
 private fun Header() {
     Row(Modifier.padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(AccentBrush),
+            Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(Color(0xFFFBE7BF)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(painterResource(R.drawable.ic_play_arrow), null, Modifier.size(24.dp), tint = Color.White)
+            com.naman.reelrein.ui.BrainIcon(0, 40)
         }
         Spacer(Modifier.width(12.dp))
         Column {
