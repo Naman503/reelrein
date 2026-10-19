@@ -37,9 +37,29 @@ class GateActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+    private var shown: View? = null
+
     fun show(root: View) {
+        if (shown === root) return
         (root.parent as? ViewGroup)?.removeView(root)
         setContentView(root)
+        shown = root
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        Gate.pendingRoot?.let { show(it) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Gate.resumed = true
+        Gate.onResumed?.invoke()
+    }
+
+    override fun onPause() {
+        Gate.resumed = false
+        super.onPause()
     }
 
     /** Back = "I don't want to open Instagram". Hooked both ways, as some phones skip one. */
@@ -89,6 +109,8 @@ object Gate {
     var current: WeakReference<GateActivity>? = null
     var onBack: (() -> Unit)? = null
     var onLeave: (() -> Unit)? = null
+    var onResumed: (() -> Unit)? = null
+    @Volatile var resumed = false
     var log: (String) -> Unit = {}
 
     val showing get() = current?.get() != null
@@ -97,6 +119,18 @@ object Gate {
         pendingRoot = null
         current?.get()?.close()
         current = null
+        resumed = false
+    }
+
+    /** Open (or bring back to the front) the gate screen with [pendingRoot]. */
+    fun open(ctx: android.content.Context) {
+        val intent = android.content.Intent(ctx, GateActivity::class.java).addFlags(
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                android.content.Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+        )
+        runCatching { ctx.startActivity(intent) }
     }
 }
 

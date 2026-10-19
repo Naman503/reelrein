@@ -368,7 +368,48 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         pressable(this, onClick)
     }
 
+    // ---------------- Cover ----------------
+    // An opaque window in the pause screen's own colours, drawn the instant Instagram appears.
+    // Starting the pause screen takes a moment and Instagram may jump back on top while it
+    // finishes launching; the cover hides all of that. It lets touches through and lifts
+    // once the pause screen is settled underneath.
+
+    private var cover: View? = null
+
+    fun showCover() {
+        if (cover != null) return
+        val v = View(ctx).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(service.getColor(R.color.rr_bg_top), service.getColor(R.color.rr_bg_mid), service.getColor(R.color.rr_bg_bottom)),
+            )
+        }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.OPAQUE,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        runCatching { wm.addView(v, lp) }.onSuccess { cover = v }
+    }
+
+    fun hideCover() {
+        val v = cover ?: return
+        cover = null
+        v.animate().alpha(0f).setDuration(realTime(140)).withEndAction { runCatching { wm.removeView(v) } }.start()
+    }
+
+    val coverShowing get() = cover != null
+
     fun hideFull() {
+        hideCover()
         fullAnimators.forEach { it.cancel() }
         fullAnimators.clear()
         if (fullView == null) return
@@ -389,17 +430,13 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         content.translationY = dp(14).toFloat()
         content.animate().alpha(1f).translationY(0f).setStartDelay(realTime(60)).setDuration(realTime(320))
             .setInterpolator(DecelerateInterpolator()).start()
+        Gate.pendingRoot = root
         val open = Gate.current?.get()
         if (open != null) {
             open.show(root) // already up: swap the screen in place
         } else {
-            Gate.pendingRoot = root
-            val intent = android.content.Intent(service, GateActivity::class.java).addFlags(
-                android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                    android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION or
-                    android.content.Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-            )
-            runCatching { service.startActivity(intent) }
+            showCover() // instant, while the gate screen starts underneath
+            Gate.open(service)
         }
         onFullShown()
     }

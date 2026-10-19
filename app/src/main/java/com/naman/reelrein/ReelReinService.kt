@@ -68,6 +68,11 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         overlays = Overlays(this, onFullShown = {}, onFullHidden = {})
         Gate.onBack = { if (igInFront) closeInstagram() else overlays.hideFull() }
         Gate.onLeave = { onGateLeft() }
+        Gate.onResumed = {
+            // Lift the cover once the pause screen has been in front for a moment.
+            handler.removeCallbacks(dropCover)
+            handler.postDelayed(dropCover, COVER_SETTLE_MS)
+        }
         Gate.log = { m -> debug { "gate: $m" } }
         speed = SpeedLock(
             this, handler,
@@ -122,6 +127,12 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         when {
             pkg == IgSignatures.PACKAGE -> {
                 handler.removeCallbacks(verifyLeft)
+                // Instagram jumped back above the pause screen (it finishes launching after
+                // we open): hide it again and put the pause screen back in front.
+                if (overlays.fullShowing && !Gate.resumed) {
+                    overlays.showCover()
+                    Gate.open(this)
+                }
                 if (!igInFront) enterInstagram() else scheduleSurfaceCheck(400)
             }
             pkg == packageName || pkg in IgSignatures.TRANSIENT_PACKAGES || pkg == imePackage() -> Unit
@@ -313,11 +324,28 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         scheduleEngage(SETTLE_MS + 300)
     }
 
-    /** The pause screen was left with Home (or by switching apps): same as closing Instagram. */
+    private val dropCover = Runnable { if (Gate.resumed) overlays.hideCover() }
+
+    /**
+     * The pause screen went to the background. If that's Instagram popping back on top
+     * (it finishes launching after we open), put the pause screen back. If it's Home or
+     * another app, treat it as closing Instagram.
+     */
     private fun onGateLeft() {
         if (!overlays.fullShowing) return
+        handler.removeCallbacks(checkGateLeft)
+        handler.postDelayed(checkGateLeft, 250)
+    }
+
+    private val checkGateLeft = Runnable {
+        if (!overlays.fullShowing || Gate.resumed) return@Runnable
+        if (igInFront && instagramOnTop()) {
+            overlays.showCover()
+            Gate.open(this)
+            return@Runnable
+        }
         overlays.hideFull()
-        if (!igInFront) return // a preview from the settings screen
+        if (!igInFront) return@Runnable // a preview from the settings screen
         val s = state.session
         if (s == null || s.timesUpShown) {
             state.session = null
@@ -807,6 +835,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         private const val SETTLE_MS = 300L            // quiet time after the last scroll before 2x
         private const val RETRY_MS = 400L
         private const val KILL_DELAY_MS = 1_200L
+        private const val COVER_SETTLE_MS = 450L
         private const val KILL_RETRY_MS = 60_000L
         private const val LOCK_SLIDE_FRACTION = 0.14f // how far the lock gesture slides
         private const val ESCALATE_STEP_S = 3
