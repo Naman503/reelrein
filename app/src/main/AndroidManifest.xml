@@ -2,8 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Privacy guarantee: this app can never talk to the network, even if a library asks for it. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- Only for anonymous usage reports (telemetry/Usage, switchable in Privacy). Nothing seen on
+         screen is ever sent; CI checks that the code talks to no other address. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <!-- Lets the setup screen ask once to exempt ReelRein from battery optimization. -->

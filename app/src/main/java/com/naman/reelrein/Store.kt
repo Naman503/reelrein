@@ -26,6 +26,8 @@ object Keys {
     const val RELOCK_SECONDS = "relock_seconds" // away from Instagram this long -> pause screen again
     const val BANK_SAFE = "bank_safe"           // switch accessibility off whenever Instagram is closed
     const val DEBUG_LOG = "debug_log"
+    const val SHARE_USAGE = "share_usage"       // anonymous usage reporting (telemetry/Usage)
+    const val USAGE_NOTICE = "usage_notice_seen" // the first-open card explaining it was dismissed
 
     // Counter pill: what it shows and how it looks
     const val PILL_BRAIN = "pill_brain"             // brain pal mascot at the start of the pill

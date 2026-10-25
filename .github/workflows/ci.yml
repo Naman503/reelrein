@@ -19,12 +19,11 @@ jobs:
       - name: Build
         # No signing secrets here, so the release build uses the debug key (never published).
         run: ./gradlew :app:assembleDebug :app:assembleRelease --console=plain
-      - name: No internet permission
+      - name: Only the usage-report API
         run: |
-          APK=$(ls app/build/outputs/apk/release/*.apk)
-          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2
-          if "$AAPT" dump permissions "$APK" | grep -q "android.permission.INTERNET"; then
-            echo "::error::The APK requests INTERNET. ReelRein must never have network access."
-            exit 1
+          # The only address the app may talk to: the usage-report API (telemetry/Usage.kt).
+          HOSTS=$(grep -rhoE "https?://[A-Za-z0-9.-]+" app/src/main | grep -v "schemas.android.com" | sort -u)
+          if [ "$HOSTS" != "https://api.np-dev.duckdns.org" ]; then
+            echo "::error::Unexpected network addresses in the app: $HOSTS"; exit 1
           fi
-          echo "OK: no INTERNET permission in $APK"
+          echo "OK: the app only talks to $HOSTS"

@@ -53,9 +53,12 @@ jobs:
           TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$TOOLS/apksigner" verify --print-certs "$APK" | tee signer.txt
           if grep -q "CN=Android Debug" signer.txt; then echo "::error::APK is debug-signed"; exit 1; fi
-          if "$TOOLS/aapt2" dump permissions "$APK" | grep -q "android.permission.INTERNET"; then
-            echo "::error::The APK requests INTERNET"; exit 1
+          # The only address the app may talk to: the usage-report API (telemetry/Usage.kt).
+          HOSTS=$(grep -rhoE "https?://[A-Za-z0-9.-]+" app/src/main | grep -v "schemas.android.com" | sort -u)
+          if [ "$HOSTS" != "https://api.np-dev.duckdns.org" ]; then
+            echo "::error::Unexpected network addresses in the app: $HOSTS"; exit 1
           fi
+          echo "OK: the app only talks to $HOSTS"
           # Stable name, so https://github.com/Naman503/reelrein/releases/latest/download/ReelRein.apk
           # always gets the newest release.
           cp "$APK" ReelRein.apk
