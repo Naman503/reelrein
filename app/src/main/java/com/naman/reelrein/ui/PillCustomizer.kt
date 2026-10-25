@@ -1,5 +1,6 @@
 package com.naman.reelrein.ui
 
+import com.naman.reelrein.telemetry.Usage
 import android.content.SharedPreferences
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -88,6 +89,7 @@ fun PillSection(prefs: SharedPreferences, serviceOn: Boolean) {
         Row(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = {
+                    Usage.ui("preview_pill")
                     if (!ReelReinService.preview(Preview.HUD)) {
                         Toast.makeText(ctx, "Turn on accessibility first", Toast.LENGTH_SHORT).show()
                     }
@@ -101,6 +103,7 @@ fun PillSection(prefs: SharedPreferences, serviceOn: Boolean) {
             }
             TextButton(onClick = {
                 prefs.edit().remove(Keys.HUD_X).remove(Keys.HUD_Y).apply()
+                Usage.ui("pill_position_reset")
                 Toast.makeText(ctx, "Pill moved back to the top", Toast.LENGTH_SHORT).show()
             }) { Text("Reset position") }
         }

@@ -24,6 +24,13 @@ class AutoScroll(
     var running = false
         private set
 
+    /**
+     * How the last try went, as a fixed word for usage counts: switched, already, or where it
+     * gave up (no_more_button, no_playback, no_item, no_switch, tap_failed).
+     */
+    var outcome = "none"
+        private set
+
     /** @param done true/false = Auto scroll is now on/off, null = couldn't tell or failed. */
     fun apply(want: Boolean, done: (Boolean?) -> Unit) {
         if (running) return
@@ -31,13 +38,13 @@ class AutoScroll(
         val more = roots().firstNotNullOfOrNull { r ->
             r.findAccessibilityNodeInfosByViewId(MORE_ID).firstOrNull { it.isVisibleToUser }
         }
-        if (more == null || !click(more)) return finish(0, null, "no More button", done)
+        if (more == null || !click(more)) return finish(0, null, "no More button", done, "no_more_button")
         // Usually More -> Playback -> Auto scroll; some menus (e.g. on ads) show it right away.
         waitFor(IgSignatures.MENU_AUTO_SCROLL, IgSignatures.MENU_PLAYBACK) { found, which ->
             when {
-                found == null -> finish(1, null, "no Playback item", done)
+                found == null -> finish(1, null, "no Playback item", done, "no_playback")
                 which == IgSignatures.MENU_AUTO_SCROLL -> toggle(found, want, done)
-                !click(found) -> finish(1, null, "couldn't open Playback", done)
+                !click(found) -> finish(1, null, "couldn't open Playback", done, "no_playback")
                 else -> waitFor(IgSignatures.MENU_AUTO_SCROLL) { label, _ -> toggle(label, want, done) }
             }
         }
@@ -57,17 +64,17 @@ class AutoScroll(
     }
 
     private fun toggle(label: AccessibilityNodeInfo?, want: Boolean, done: (Boolean?) -> Unit) {
-        if (label == null) return finish(2, null, "no Auto scroll item", done)
+        if (label == null) return finish(2, null, "no Auto scroll item", done, "no_item")
         val row = clickableAncestor(label) ?: label
         val switch = findToggle(row) ?: findToggle(label.parent)
-        val on = switch?.isChecked ?: return finish(2, null, "can't read the switch", done)
+        val on = switch?.isChecked ?: return finish(2, null, "can't read the switch", done, "no_switch")
         log("auto scroll: switch ${describe(switch)}; row ${describe(row)}")
-        if (on == want) return finish(2, on, "already ${if (on) "on" else "off"}", done)
+        if (on == want) return finish(2, on, "already ${if (on) "on" else "off"}", done, "already")
         // Tap the toggle like a finger would, then read it again before deciding anything.
         tapCenter(switch)
         handler.postDelayed({
             val now = readSwitch()
-            finish(2, now, if (now == want) "switched" else "tap didn't take (now $now)", done)
+            finish(2, now, if (now == want) "switched" else "tap didn't take (now $now)", done, if (now == want) "switched" else "tap_failed")
         }, VERIFY_MS)
     }
 
@@ -78,8 +85,9 @@ class AutoScroll(
      * Close the menus we opened: Back only while one of Instagram's menu items is still on
      * screen, at most 3 times, so we never back out of Reels itself.
      */
-    private fun finish(opened: Int, result: Boolean?, why: String, done: (Boolean?) -> Unit) {
+    private fun finish(opened: Int, result: Boolean?, why: String, done: (Boolean?) -> Unit, outcome: String) {
         log("auto scroll: $why")
+        this.outcome = outcome
         fun back(left: Int) {
             val menuShowing = IgSignatures.MENU_MARKERS.any { exact(it) != null }
             if (left <= 0 || !menuShowing) {

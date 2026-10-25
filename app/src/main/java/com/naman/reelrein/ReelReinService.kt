@@ -20,6 +20,7 @@ import com.naman.reelrein.overlay.Overlays
 import com.naman.reelrein.overlay.PauseInfo
 import com.naman.reelrein.overlay.TimesUpInfo
 import java.lang.ref.WeakReference
+import com.naman.reelrein.telemetry.Buckets
 import com.naman.reelrein.telemetry.Usage
 
 /**
@@ -43,6 +44,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     private val counter get() = state.counter
 
     private var connected = false
+    private var sleepingOnPurpose = false
     private var igInFront = false
     private var lastTick = 0L
     private var pendingMs = 0L
@@ -64,12 +66,22 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         Usage.start(this)
         Usage.once("setup_accessibility")
         prefs = Keys.prefs(this)
+        // Connected: normally, or switched on by bank-safe mode. If the last run never reached
+        // onDestroy, Android killed it (or it crashed) and has now restarted it.
+        val runtime = getSharedPreferences("runtime", MODE_PRIVATE)
+        if (runtime.getBoolean(RT_ALIVE, false)) Usage.count("a11y_restart")
+        runtime.edit().putBoolean(RT_ALIVE, true).apply()
+        Usage.count("a11y_connected", props = mapOf("mode" to if (prefs.getBoolean(Keys.BANK_SAFE, false)) "bank_safe" else "normal"))
         stats = StatsStore(this)
         audio = AudioGate(this)
         audio.restore() // in case a previous run was killed while Instagram was muted
         // No muting needed any more: Instagram pauses itself behind the pause screen.
         overlays = Overlays(this, onFullShown = {}, onFullHidden = {})
-        Gate.onBack = { if (igInFront) closeInstagram() else overlays.hideFull() }
+        overlays.onStep = { screen, step -> Usage.count("screen_step", props = mapOf("screen" to screen, "step" to step)) }
+        Gate.onBack = {
+            screenLeft("back")
+            if (igInFront) closeInstagram(endedBy()) else overlays.hideFull()
+        }
         Gate.onLeave = { onGateLeft() }
         Gate.onResumed = {
             // Lift the cover once the pause screen has been in front for a moment.
@@ -109,9 +121,11 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         }
     }
 
-    override fun onInterrupt() = Unit
+    override fun onInterrupt() = Usage.count("a11y_interrupt")
 
     override fun onDestroy() {
+        getSharedPreferences("runtime", MODE_PRIVATE).edit().putBoolean(RT_ALIVE, false).apply()
+        Usage.count("a11y_disconnected", props = mapOf("reason" to if (sleepingOnPurpose) "bank_safe_sleep" else "stopped"))
         if (connected) {
             if (igInFront) leaveInstagram()
             prefs.unregisterOnSharedPreferenceChangeListener(this)
@@ -156,7 +170,10 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     private fun instagramOnTop(): Boolean {
         val apps = runCatching { windows }.getOrNull().orEmpty()
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-        if (apps.isEmpty()) return rootInActiveWindow?.packageName?.toString() == IgSignatures.PACKAGE
+        if (apps.isEmpty()) {
+            Usage.count("detect_issue", props = mapOf("kind" to "no_windows"))
+            return rootInActiveWindow?.packageName?.toString() == IgSignatures.PACKAGE
+        }
         val top = apps.firstOrNull { it.isActive } ?: apps.maxByOrNull { it.layer }
         return top?.root?.packageName?.toString() == IgSignatures.PACKAGE
     }
@@ -171,12 +188,14 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
         if (state.session != null && now() - state.lastLeftAt < relockMs()) {
             // Came back quickly (share sheet, notification, app switch): same session.
+            Usage.count("session_resumed")
             overlays.ensureCancelPad()
             scheduleSurfaceCheck(500)
             refreshHud()
             return
         }
 
+        state.session?.let { reportSessionEnd(it, "left") } // away longer than the re-pause time
         state.session = null
         state.autoScrollDone = false
         state.hudHidden = false
@@ -200,7 +219,10 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         setOnReels(false)
         overlays.hideAll()
         // A session that hit its limit is over; reopening starts with the pause screen again.
-        if (state.session?.timesUpShown == true) state.session = null
+        state.session?.takeIf { it.timesUpShown }?.let {
+            reportSessionEnd(it, "times_up")
+            state.session = null
+        }
         setListening(false)
         Usage.flushSoon()
         if (prefs.getBoolean(Keys.BANK_SAFE, false) && LaunchWatcher.ready(this)) {
@@ -213,6 +235,8 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     private val sleep = Runnable {
         if (igInFront) return@Runnable
         debug { "bank-safe: switching off" }
+        sleepingOnPurpose = true
+        Usage.count("bank_safe_sleep")
         audio.restore()
         disableSelf()
     }
@@ -245,6 +269,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         }
         speed.forget()
         Usage.count("pause_shown")
+        Usage.count("pause_detail", props = mapOf("wait" to Buckets.waitSeconds(seconds), "nth" to Buckets.opens(day.opens)))
         Usage.once("first_pause")
         overlays.showPause(
             seconds = seconds,
@@ -253,13 +278,14 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             onStart = { minutes ->
                 rememberMinutes(minutes)
                 Usage.count("pause_result", props = mapOf("choice" to "opened"))
-                Usage.count("limit_chosen", props = mapOf("minutes" to minutesBucket(minutes)))
+                Usage.count("limit_chosen", props = mapOf("minutes" to Buckets.limitMinutes(minutes)))
                 startSession(minutes * 60_000L)
                 backToInstagram()
             },
             onClose = {
                 Usage.count("pause_result", props = mapOf("choice" to "closed"))
-                closeInstagram()
+                screenLeft("button")
+                closeInstagram(null)
             },
         )
         refreshHud()
@@ -268,6 +294,11 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     private fun startSession(limitMs: Long?) {
         overlays.ensureCancelPad() // ready before the first 2x press
         state.session = Session(limitMs)
+        Usage.count("session_start", props = mapOf(
+            "limit" to (limitMs?.let { Buckets.limitMinutes((it / 60_000).toInt()) } ?: "none"),
+            "via" to if (limitMs == null) "no_pause" else "pause",
+        ))
+        Usage.once("first_session")
         lastTick = now()
         refreshHud()
         scheduleSurfaceCheck(300)
@@ -283,13 +314,15 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             onStart = { minutes ->
                 rememberMinutes(minutes)
                 Usage.count("times_up_result", props = mapOf("choice" to "extended"))
+                Usage.count("extend_chosen", props = mapOf("minutes" to Buckets.limitMinutes(minutes)))
                 s.limitMs = s.usedMs + minutes * 60_000L
                 s.timesUpShown = false
                 backToInstagram()
             },
             onClose = {
                 Usage.count("times_up_result", props = mapOf("choice" to "closed"))
-                closeInstagram()
+                screenLeft("button")
+                closeInstagram("times_up")
             },
         )
         refreshHud()
@@ -302,24 +335,52 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
     private fun rememberMinutes(m: Int) = prefs.edit().putInt(Keys.LAST_MINUTES, m).apply()
 
-    /** Limits in a few groups, so the report says "5–10 min", not every exact number. */
-    private fun minutesBucket(m: Int) = when {
-        m <= 5 -> "1-5"
-        m <= 10 -> "6-10"
-        m <= 15 -> "11-15"
-        m <= 30 -> "16-30"
-        m <= 60 -> "31-60"
-        else -> "60+"
+    /**
+     * Which full screen was left, at which step, and how (its button, Back, or Home / another
+     * app). Fixed words only.
+     */
+    private fun screenLeft(via: String) {
+        val screen = overlays.fullKind ?: return
+        Usage.count("screen_exit", props = mapOf("screen" to screen, "step" to (overlays.fullStep ?: screen), "via" to via))
+    }
+
+    /** Why a session that's being closed ended, from the screen on top. */
+    private fun endedBy(): String? = when (overlays.fullKind) {
+        "times_up" -> "times_up"
+        "brain_full" -> "reel_cap"
+        "change_limit" -> "back"
+        else -> null // the pause screen: no session yet
+    }
+
+    /**
+     * One finished session, in ranges: how long, time on Reels, reels, whether it had a limit
+     * and how it ended. A session with time in Instagram but no Reels found at all is also how
+     * a missed Reels screen shows up.
+     */
+    private fun reportSessionEnd(s: Session, how: String) {
+        if (s.reported) return
+        s.reported = true
+        Usage.count("session_end", props = mapOf(
+            "length" to Buckets.duration(s.usedMs),
+            "reel_time" to Buckets.duration(s.reelMs),
+            "reels" to Buckets.reels(s.reels),
+            "limit" to if (s.limited) "set" else "none",
+            "end" to how,
+        ))
+        if (s.usedMs >= 2 * 60_000 && s.reels == 0 && s.reelMs == 0L) {
+            Usage.count("detect_issue", props = mapOf("kind" to "no_reels_seen"))
+        }
     }
 
     /**
      * "Close Instagram" / "I don't want to open Instagram" / Back on the pause screen: go home,
      * then end Instagram's background process so it's really closed, not just hidden.
      */
-    private fun closeInstagram() {
+    private fun closeInstagram(how: String?) {
         debug { "close Instagram" }
         overlays.hideFull()
         speed.forget()
+        state.session?.let { if (how != null) reportSessionEnd(it, how) else reportSessionEnd(it, "closed") }
         state.session = null
         performGlobalAction(GLOBAL_ACTION_HOME)
         killInstagramSoon()
@@ -335,7 +396,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 if (igInFront) return@postDelayed // you went back to Instagram
                 runCatching {
                     getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(IgSignatures.PACKAGE)
-                }
+                }.onFailure { Usage.nonFatal("kill_instagram", it) }
                 debug { "asked Android to close Instagram's background process" }
             }, delay)
         }
@@ -367,14 +428,17 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     private val checkGateLeft = Runnable {
         if (!overlays.fullShowing || Gate.resumed) return@Runnable
         if (igInFront && instagramOnTop()) {
+            Usage.count("gate_reopened")
             overlays.showCover()
             Gate.open(this)
             return@Runnable
         }
+        if (igInFront) screenLeft("home")
         overlays.hideFull()
         if (!igInFront) return@Runnable // a preview from the settings screen
         val s = state.session
         if (s == null || s.timesUpShown) {
+            s?.let { reportSessionEnd(it, "times_up") }
             state.session = null
             leaveInstagram()
             killInstagramSoon()
@@ -404,6 +468,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             if (pendingMs >= FLUSH_MS) flushTime()
             // Safety net for a missed "left Instagram" event.
             if (++ticks % 5 == 0 && !overlays.fullShowing && !instagramOnTop()) {
+                Usage.count("detect_issue", props = mapOf("kind" to "missed_leave"))
                 leaveInstagram()
                 return
             }
@@ -461,6 +526,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 onNewReel()
             }
         } else if (move != ReelCounter.Move.NONE) {
+            Usage.count("detect_issue", props = mapOf("kind" to "pager_no_index"))
             onNewReel() // pager without indexes
         }
         // Every scroll event pushes this back, so the press only lands once the reel has stopped.
@@ -483,6 +549,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     /** An unconfirmed lock (no "Locked at 2x" toast) gets one more try on the same reel. */
     private fun onLockResult(r: SpeedLock.Result) {
         if (r == SpeedLock.Result.LOCKED) Usage.count("speed_locked")
+        Usage.count("speed_result", props = mapOf("result" to r.name.lowercase(), "method" to speedMethod().name.lowercase()))
         if (r == SpeedLock.Result.UNCONFIRMED && attempts < 1) {
             attempts++
             scheduleEngage(RETRY_MS)
@@ -512,6 +579,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         onReels = value
         debug { "onReels=$value" }
         if (value) {
+            if (state.session != null) Usage.count("reels_entered")
             if (state.session != null && counter.markEntered()) addReel()
             waitingForNextReel = false
             if (!maybeSetAutoScroll()) scheduleEngage(SETTLE_MS)
@@ -528,6 +596,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         s.reels++
         stats.addReels(1)
         Usage.count("reels")
+        Usage.once("first_reel")
         refreshHud()
         checkReelCap()
     }
@@ -554,10 +623,12 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             info = sessionInfo(s),
             onClose = {
                 Usage.count("reel_cap_result", props = mapOf("choice" to "closed"))
-                closeInstagram()
+                screenLeft("button")
+                closeInstagram("reel_cap")
             },
             onContinue = {
                 Usage.count("reel_cap_result", props = mapOf("choice" to "continued"))
+                screenLeft("continue")
                 runtime.edit().putString("cap_ack_day", today.date.toString()).putInt("cap_ack_reels", today.reels).apply()
                 backToInstagram()
             },
@@ -575,7 +646,10 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     /** After taps and window changes, look for the Reels pager on screen (bounded search). */
     private val surfaceCheck = Runnable {
         if (!igInFront || state.session == null) return@Runnable
-        val root = rootInActiveWindow ?: return@Runnable
+        val root = rootInActiveWindow ?: run {
+            Usage.count("detect_issue", props = mapOf("kind" to "no_root"))
+            return@Runnable
+        }
         if (root.packageName?.toString() != IgSignatures.PACKAGE) return@Runnable
         val found = findReelsPager(root)
         debug { "surfaceCheck found=$found" }
@@ -628,6 +702,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         if (!igInFront || !onReels || waitingForNextReel || overlays.fullShowing) return@Runnable
         if (state.session == null || !speedOn() || autoScroll.running) return@Runnable
         if (isAdOnScreen()) {
+            Usage.count("ad_skipped")
             debug { "ad on screen: no 2x press" }
             return@Runnable
         }
@@ -706,6 +781,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 initialMinutes = lastMinutes(),
                 onStart = { minutes ->
                     rememberMinutes(minutes)
+                    Usage.count("change_limit_result", props = mapOf("choice" to "changed", "minutes" to Buckets.limitMinutes(minutes)))
                     s.limitMs = s.usedMs + minutes * 60_000L
                     s.timesUpShown = false
                     overlays.hideFull()
@@ -714,6 +790,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                     scheduleEngage(SETTLE_MS)
                 },
                 onCancel = {
+                    Usage.count("change_limit_result", props = mapOf("choice" to "kept"))
                     overlays.hideFull()
                     refreshHud()
                     waitingForNextReel = false
@@ -731,11 +808,16 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
         override fun onEndSession() {
             Usage.event("pill_action", mapOf("action" to "end_session"))
-            closeInstagram()
+            closeInstagram("end_session")
         }
 
         override fun onMoved(x: Int, y: Int) {
+            Usage.count("pill_moved")
             prefs.edit().putInt(Keys.HUD_X, x).putInt(Keys.HUD_Y, y).apply()
+        }
+
+        override fun onPanel(open: Boolean) {
+            if (open) Usage.count("pill_panel_opened")
         }
     }
 
@@ -796,6 +878,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         handler.removeCallbacks(engage)
         speed.forget()
         autoScroll.apply(want) { result ->
+            Usage.count("auto_scroll_result", props = mapOf("want" to if (want) "on" else "off", "result" to autoScroll.outcome))
             state.autoScrollDone = true // one try per session, even if it failed
             refreshHud()
             scheduleEngage(SETTLE_MS) // 2x after the menus are closed
@@ -835,7 +918,9 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             override fun onChangeLimit() = Unit
             override fun onHide() = overlays.hideHud()
             override fun onEndSession() = overlays.hideHud()
-            override fun onMoved(x: Int, y: Int) = hudActions.onMoved(x, y)
+            override fun onMoved(x: Int, y: Int) {
+                prefs.edit().putInt(Keys.HUD_X, x).putInt(Keys.HUD_Y, y).apply()
+            }
         }
         overlays.hideHud()
         overlays.showHud(prefs.getInt(Keys.HUD_X, 0), prefs.getInt(Keys.HUD_Y, -1), HudConfig.from(prefs), preview)
@@ -851,8 +936,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     }
 
     override fun onSharedPreferenceChanged(p: SharedPreferences, key: String?) {
-        // Which setting changed (its key, never a value); positions and the last limit are noise.
-        if (key != null && key !in Usage.QUIET_KEYS) Usage.event("settings_changed", mapOf("setting" to key.take(32)))
+        // (Usage reports settings changes itself, also while this service is off.)
         if (key == Keys.TIME_SECONDS) showSeconds = p.getBoolean(key, true)
         if (key in Keys.HUD_LAYOUT_KEYS || key == Keys.HUD_X || key == Keys.HUD_Y) {
             // Rebuild the pill with the new layout (a pill dragged on screen is already there).
@@ -906,6 +990,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         }
 
         private const val TAG = "ReelRein"
+        private const val RT_ALIVE = "service_alive"
         const val DEFAULT_RELOCK_S = 10               // leave and come back within this = same session
         private const val SLEEP_AFTER_MS = 5_000L     // bank-safe: switch off this long after leaving
         private const val FLUSH_MS = 30_000L

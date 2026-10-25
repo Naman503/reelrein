@@ -41,8 +41,8 @@ android {
         applicationId = "com.naman.reelrein"
         minSdk = 26 // StrokeDescription.continueStroke (the held 2x press) needs API 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -92,4 +92,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+
+    testImplementation("junit:junit:4.13.2")
 }

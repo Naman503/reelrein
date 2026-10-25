@@ -49,7 +49,14 @@ class LaunchWatcher : Service() {
     override fun onCreate() {
         super.onCreate()
         usm = getSystemService(UsageStatsManager::class.java)
-        startInForeground()
+        com.naman.reelrein.telemetry.Usage.start(this)
+        com.naman.reelrein.telemetry.Usage.count("watcher_started")
+        runCatching { startInForeground() }.onFailure {
+            // Android 12+ can refuse a foreground service started from the background.
+            com.naman.reelrein.telemetry.Usage.nonFatal("watcher_foreground", it)
+            stopSelf()
+            return
+        }
         registerReceiver(screen, IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
@@ -80,7 +87,10 @@ class LaunchWatcher : Service() {
                 instagramOpened = true
             }
         }
-        if (instagramOpened && !A11yToggle.isEnabled(this)) A11yToggle.enable(this)
+        if (instagramOpened && !A11yToggle.isEnabled(this)) {
+            val ok = A11yToggle.enable(this)
+            com.naman.reelrein.telemetry.Usage.count("bank_safe_wake", props = mapOf("ok" to ok.toString()))
+        }
     }
 
     private fun startInForeground() {
@@ -92,7 +102,8 @@ class LaunchWatcher : Service() {
             },
         )
         val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+            this, 0, Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_FROM, MainActivity.FROM_NOTIFICATION),
+            PendingIntent.FLAG_IMMUTABLE,
         )
         val n = Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_verified_user)
@@ -128,6 +139,7 @@ class LaunchWatcher : Service() {
             val intent = Intent(ctx, LaunchWatcher::class.java)
             if (on) {
                 runCatching { ctx.startForegroundService(intent) }
+                    .onFailure { com.naman.reelrein.telemetry.Usage.nonFatal("watcher_start", it) }
             } else {
                 ctx.stopService(intent)
                 // Leaving bank-safe mode: the service should simply stay on from now on.
@@ -140,6 +152,9 @@ class LaunchWatcher : Service() {
 /** Restarts the watcher after a reboot or an app update. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        com.naman.reelrein.telemetry.Usage.start(context)
+        val why = if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) "update" else "boot"
+        com.naman.reelrein.telemetry.Usage.count("boot_event", props = mapOf("kind" to why))
         if (Keys.prefs(context).getBoolean(Keys.BANK_SAFE, false)) LaunchWatcher.sync(context)
     }
 }

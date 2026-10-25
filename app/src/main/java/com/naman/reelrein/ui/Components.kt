@@ -181,10 +181,13 @@ fun PrefStepperRow(
 
 /** A row that expands to show more content below it. */
 @Composable
-fun ExpandableRow(icon: Int, title: String, subtitle: String?, content: @Composable () -> Unit) {
+fun ExpandableRow(icon: Int, title: String, subtitle: String?, onOpen: (() -> Unit)? = null, content: @Composable () -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     val angle by animateFloatAsState(if (open) 180f else 0f, label = "chevron")
-    SettingRow(icon, title, subtitle, onClick = { open = !open }) {
+    SettingRow(icon, title, subtitle, onClick = {
+        open = !open
+        if (open) onOpen?.invoke()
+    }) {
         Icon(
             painterResource(R.drawable.ic_expand_more),
             if (open) "Collapse" else "Expand",

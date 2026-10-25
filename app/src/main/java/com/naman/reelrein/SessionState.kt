@@ -11,6 +11,8 @@ object SessionState {
         var reelMs = 0L     // of which on Reels
         var reels = 0
         var timesUpShown = false
+        val limited = limitMs != null
+        var reported = false // its "session_end" usage count is done
     }
 
     var session: Session? = null
