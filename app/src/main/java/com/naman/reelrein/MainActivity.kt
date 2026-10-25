@@ -85,6 +85,8 @@ import com.naman.reelrein.ui.WeekBars
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.naman.reelrein.telemetry.Usage
+import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
     private val resumes = mutableIntStateOf(0)
@@ -92,6 +94,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        Usage.start(this)
         setContent {
             ReelReinTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -111,6 +114,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         resumes.intValue++ // re-read service state and stats when coming back from Settings
         LaunchWatcher.sync(this)
+        Usage.count("app_open")
+        Usage.flushSoon()
         contentResolver.registerContentObserver(
             Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, a11yObserver,
         )
@@ -134,6 +139,13 @@ private fun HomeScreen(refreshKey: Int) {
     // In bank-safe mode the service is off by design while Instagram is closed.
     val protectedNow = serviceOn || (bankSafe && bankReady)
     val days = remember(refreshKey) { stats.lastDays(7) }
+    var noticeSeen by remember { mutableStateOf(prefs.getBoolean(Keys.USAGE_NOTICE, false)) }
+    var sharing by remember { mutableStateOf(prefs.getBoolean(Keys.SHARE_USAGE, true)) }
+    // Setup steps reached (each sent once per install, if sharing is on).
+    LaunchedEffect(refreshKey) {
+        if (batteryOk) Usage.once("setup_battery")
+        if (bankReady) Usage.once("setup_bank_safe")
+    }
 
     Column(
         Modifier
@@ -145,6 +157,21 @@ private fun HomeScreen(refreshKey: Int) {
     ) {
         Header()
         SetupCard(protectedNow, batteryOk, sleeping = bankSafe && bankReady && !serviceOn)
+        if (!noticeSeen) {
+            UsageNotice(
+                sharing = sharing,
+                onOk = {
+                    noticeSeen = true
+                    prefs.edit().putBoolean(Keys.USAGE_NOTICE, true).apply()
+                },
+                onTurnOff = {
+                    sharing = false
+                    noticeSeen = true
+                    prefs.edit().putBoolean(Keys.SHARE_USAGE, false).putBoolean(Keys.USAGE_NOTICE, true).apply()
+                    Usage.turnedOff()
+                },
+            )
+        }
         TodayCard(days)
 
         SectionCard("Before Instagram opens", R.drawable.ic_self_improvement) {
@@ -187,7 +214,24 @@ private fun HomeScreen(refreshKey: Int) {
             PrefSwitchRow(prefs, Keys.DEBUG_LOG, false, R.drawable.ic_code, "Debug log", "adb logcat -s ReelRein · view IDs only, never text")
         }
 
-        PrivacyFooter()
+        SectionCard("Privacy", R.drawable.ic_verified_user) {
+            // key(sharing): the row re-reads the setting when the notice above turned it off.
+            androidx.compose.runtime.key(sharing) {
+                PrefSwitchRow(
+                    prefs, Keys.SHARE_USAGE, true, R.drawable.ic_verified_user, "Share anonymous usage",
+                    "Helps decide what to improve. Turning it off deletes what was sent.",
+                    onChange = { on ->
+                        sharing = on
+                        if (on) Usage.turnedOn() else Usage.turnedOff()
+                    },
+                )
+            }
+            ExpandableRow(R.drawable.ic_visibility, "What's sent, and what never is", null) {
+                UsageDetails()
+            }
+        }
+
+        PrivacyFooter(sharing)
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -526,7 +570,7 @@ private fun CheckLine(done: Boolean, text: String, action: @Composable () -> Uni
 }
 
 @Composable
-private fun PrivacyFooter() {
+private fun PrivacyFooter(sharing: Boolean) {
     Row(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.Center,
@@ -535,8 +579,60 @@ private fun PrivacyFooter() {
         Icon(painterResource(R.drawable.ic_lock), null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(6.dp))
         Text(
-            "No internet permission · everything stays on this phone",
+            if (sharing) "Nothing on your screen leaves this phone · anonymous usage on"
+            else "Nothing leaves this phone · anonymous usage off",
             style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Shown once: says plainly that usage sharing is on, what it is, and offers to turn it off. */
+@Composable
+private fun UsageNotice(sharing: Boolean, onOk: () -> Unit, onTurnOff: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Anonymous usage sharing", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "ReelRein sends anonymous counts (how often the pause screen shows, reels and minutes per day, " +
+                    "which features you use, crashes) with a random id. Never what's on screen: no captions, " +
+                    "accounts, messages or which reels. You can turn it off any time in Privacy below, and that " +
+                    "deletes what was sent.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOk) { Text(if (sharing) "OK, keep it on" else "OK") }
+                if (sharing) OutlinedButton(onClick = onTurnOff) { Text("Turn off") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageDetails() {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val sent = listOf(
+            "Daily counts: Instagram opens, pause screens and what you chose, reels, minutes on Reels and in Instagram, time's up and reel-cap screens",
+            "Which features and settings you use (switch names, never values you typed) and your limit in ranges like 6–10 min",
+            "Setup steps reached, app version, Android version, phone model and language",
+            "Crashes: the error type and where in ReelRein's code, never screen text",
+        )
+        val never = listOf(
+            "Anything on screen in Instagram: captions, comments, usernames, messages, which reels",
+            "Your account, contacts, location or advertising id",
+        )
+        Text("Sent, with a random id made on this phone:", style = MaterialTheme.typography.labelLarge)
+        sent.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Text("Never sent:", style = MaterialTheme.typography.labelLarge)
+        never.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Text(
+            "Reports go to api.np-dev.duckdns.org at most every 6 hours. Your IP is used for the country only and isn't stored.",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

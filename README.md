@@ -11,7 +11,7 @@ A breath and a time limit before Instagram opens, a live counter of your time on
 [![Release](https://img.shields.io/github/v/release/Naman503/reelrein?color=8E90FF)](https://github.com/Naman503/reelrein/releases)
 [![Downloads](https://img.shields.io/github/downloads/Naman503/reelrein/total?color=8E90FF)](https://github.com/Naman503/reelrein/releases)
 ![Android 8+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
-![No internet permission](https://img.shields.io/badge/internet-none-22C55E)
+![No screen data sent](https://img.shields.io/badge/screen%20data%20sent-none-22C55E)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <br>
@@ -60,7 +60,7 @@ Instagram is built to keep you scrolling, and Android's own tools don't help muc
 - **2× speed is a gesture you repeat on every reel.** You hold the screen, then slide down to lock 2×, and the lock resets on the next reel.
 - **Auto scroll resets every session.** It's three menus deep, under ⋯ → Playback.
 
-ReelRein sits next to Instagram and fixes all four. It has **no internet permission at all**, so nothing it sees can leave your phone.
+ReelRein sits next to Instagram and fixes all four. **Nothing it sees on screen ever leaves your phone**; it only shares anonymous counts, and you can switch that off.
 
 ## 📸 Screenshots
 
@@ -94,7 +94,7 @@ ReelRein sits next to Instagram and fixes all four. It has **no internet permiss
 | ⚡ **Every reel at 2×** | Uses Instagram's own "hold, slide down to lock 2×", once per reel. It waits for Instagram's hint before sliding, confirms the lock, skips ads, and never turns a press into a tap. |
 | 🔁 **Auto scroll every session** | Switches on Instagram's own Auto scroll (⋯ → Playback) at the start of each session. It reads the switch first, so it never turns it off by mistake. |
 | 🏦 **Bank-safe mode** | Optional. Accessibility is switched off whenever Instagram is closed, so banking apps that refuse to run with accessibility services work normally. |
-| 🔒 **Private by design** | No internet permission, no accounts, no analytics. Daily totals only. It never reads captions, comments, usernames or messages. |
+| 🔒 **Private by design** | No accounts, no ads. It never reads captions, comments, usernames or messages. Anonymous usage counts can be switched off (and deleted) in Privacy. |
 | 🔋 **Light** | While Instagram is closed it only listens for app switches. Scroll tracking runs only while Instagram is in front. The APK is about 1 MB. |
 
 ## 🧩 Features in detail
@@ -202,11 +202,12 @@ More per-brand tips: [dontkillmyapp.com](https://dontkillmyapp.com).
 | Usage access | Bank-safe mode: notice Instagram opening while the service is off | Bank-safe only |
 | `WRITE_SECURE_SETTINGS` (via adb) | Bank-safe mode: switch its own service on and off | Bank-safe only |
 | Notifications | Bank-safe mode's small "waiting for Instagram" notification | Bank-safe only |
-| **Internet** | **Not requested.** It's removed from the manifest, and CI fails if it ever appears | Never |
+| Internet | Anonymous usage reports only (Settings → Privacy). CI fails if the code talks to any address other than the report API | Optional (switch off in Privacy) |
 
 ## 🔒 Privacy
 
-- **Nothing leaves the phone.** There's no internet permission, so it can't send anything anywhere.
+- **Nothing on screen leaves the phone.** No captions, comments, usernames, messages, accounts or which reels, ever.
+- **Anonymous usage (from 0.2.0, on by default, shown on first open).** Daily counts (Instagram opens, pause screens and what you chose, reels, minutes on Reels and in Instagram, time's-up and reel-cap screens), which features and settings are used (names only), setup steps and crashes (error type and code location), with a random install id, app version, Android version, phone model and language. Sent to `api.np-dev.duckdns.org` at most every 6 hours; the IP is used for the country only and not stored. **Settings → Privacy → Share anonymous usage** turns it off and deletes what that install sent. Code: [`telemetry/Usage.kt`](app/src/main/java/com/naman/reelrein/telemetry/Usage.kt).
 - **What it looks at:**
   - which app is in front;
   - scroll events and view IDs inside Instagram (to count reels and find the Reels screen);
