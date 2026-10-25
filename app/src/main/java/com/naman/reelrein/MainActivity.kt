@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Usage.start(this)
+        fromNotification(intent)
         setContent {
             ReelReinTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -102,6 +103,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        fromNotification(intent)
+    }
+
+    /** Opened by tapping bank-safe mode's notification. */
+    private fun fromNotification(intent: Intent?) {
+        if (intent?.getStringExtra(EXTRA_FROM) == FROM_NOTIFICATION) {
+            Usage.count("notification_tap")
+            intent.removeExtra(EXTRA_FROM)
+        }
+    }
+
+    companion object {
+        const val EXTRA_FROM = "from"
+        const val FROM_NOTIFICATION = "notification"
     }
 
     private val a11yObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -145,6 +164,7 @@ private fun HomeScreen(refreshKey: Int) {
     LaunchedEffect(refreshKey) {
         if (batteryOk) Usage.once("setup_battery")
         if (bankReady) Usage.once("setup_bank_safe")
+        if (serviceOn && batteryOk) Usage.once("setup_complete") else Usage.once("setup_card_seen")
     }
 
     Column(
@@ -161,6 +181,7 @@ private fun HomeScreen(refreshKey: Int) {
             UsageNotice(
                 sharing = sharing,
                 onOk = {
+                    Usage.once("usage_notice_ok")
                     noticeSeen = true
                     prefs.edit().putBoolean(Keys.USAGE_NOTICE, true).apply()
                 },
@@ -196,7 +217,7 @@ private fun HomeScreen(refreshKey: Int) {
                 "Holds Instagram's own 2× for you. Swipe as usual; tap the pill for 1× on one reel.",
             )
             SpeedMethodPicker(prefs)
-            ExpandableRow(R.drawable.ic_tune, "Adjust the press point", "If 2× doesn't start or a button gets pressed") {
+            ExpandableRow(R.drawable.ic_tune, "Adjust the press point", "If 2× doesn't start or a button gets pressed", onOpen = { Usage.ui("open_press_point") }) {
                 HoldPointEditor(prefs)
             }
         }
@@ -226,7 +247,7 @@ private fun HomeScreen(refreshKey: Int) {
                     },
                 )
             }
-            ExpandableRow(R.drawable.ic_visibility, "What's sent, and what never is", null) {
+            ExpandableRow(R.drawable.ic_visibility, "What's sent, and what never is", null, onOpen = { Usage.ui("open_usage_details") }) {
                 UsageDetails()
             }
         }
@@ -289,16 +310,22 @@ private fun SetupCard(serviceOn: Boolean, batteryOk: Boolean, sleeping: Boolean)
                     R.drawable.ic_accessibility, "Turn on accessibility",
                     "Greyed out? App info → ⋮ → Allow restricted settings",
                     "Open",
-                ) { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                ) {
+                    Usage.ui("setup_accessibility")
+                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
             }
             if (!batteryOk) {
                 SetupStep(
                     R.drawable.ic_bolt, "Allow background running",
                     "Stops the phone from switching ReelRein off",
                     "Allow",
-                ) { requestBatteryExemption(ctx) }
+                ) {
+                    Usage.ui("setup_battery")
+                    requestBatteryExemption(ctx)
+                }
             }
-            ExpandableRow(R.drawable.ic_lock, "Keep it alive on iQOO", "If it still turns itself off") {
+            ExpandableRow(R.drawable.ic_lock, "Keep it alive on iQOO", "If it still turns itself off", onOpen = { Usage.ui("open_keep_alive") }) {
                 Text(
                     "1. Recents: pull down on ReelRein's card to lock it\n" +
                         "2. Settings → Battery → Background power consumption management → ReelRein → Allow\n" +
@@ -310,6 +337,7 @@ private fun SetupCard(serviceOn: Boolean, batteryOk: Boolean, sleeping: Boolean)
                 )
                 TextButton(
                     onClick = {
+                        Usage.ui("keep_alive_app_info")
                         ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
                     },
                     modifier = Modifier.padding(start = 62.dp),
@@ -346,7 +374,10 @@ private fun TodayCard(days: List<DayStat>) {
                 listOf("Reels", "Time").forEachIndexed { i, label ->
                     SegmentedButton(
                         selected = metric == i,
-                        onClick = { metric = i },
+                        onClick = {
+                            if (metric != i) Usage.ui(if (i == 0) "stats_reels" else "stats_time")
+                            metric = i
+                        },
                         shape = SegmentedButtonDefaults.itemShape(i, 2),
                         icon = {},
                     ) { Text(label, style = MaterialTheme.typography.labelMedium) }
@@ -419,6 +450,7 @@ private fun PreviewButtons(serviceOn: Boolean, items: List<Pair<String, Preview>
         items.forEach { (label, which) ->
             OutlinedButton(
                 onClick = {
+                    Usage.ui(if (which == Preview.PAUSE) "preview_pause" else "preview_times_up")
                     if (!ReelReinService.preview(which)) {
                         Toast.makeText(ctx, "Turn on accessibility first", Toast.LENGTH_SHORT).show()
                     }
@@ -443,13 +475,20 @@ private fun HoldPointEditor(prefs: android.content.SharedPreferences) {
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text("Across · ${(x * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
-            Slider(x, { x = it }, valueRange = 0.55f..0.98f, onValueChangeFinished = { prefs.edit().putFloat(Keys.HOLD_X, x).apply() })
+            Slider(x, { x = it }, valueRange = 0.55f..0.98f, onValueChangeFinished = {
+                prefs.edit().putFloat(Keys.HOLD_X, x).apply()
+                Usage.ui("press_point_moved")
+            })
             Text("Down · ${(y * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
-            Slider(y, { y = it }, valueRange = 0.15f..0.80f, onValueChangeFinished = { prefs.edit().putFloat(Keys.HOLD_Y, y).apply() })
+            Slider(y, { y = it }, valueRange = 0.15f..0.80f, onValueChangeFinished = {
+                prefs.edit().putFloat(Keys.HOLD_Y, y).apply()
+                Usage.ui("press_point_moved")
+            })
             TextButton(onClick = {
                 x = IgSignatures.DEFAULT_HOLD_X
                 y = IgSignatures.DEFAULT_HOLD_Y
                 prefs.edit().remove(Keys.HOLD_X).remove(Keys.HOLD_Y).apply()
+                Usage.ui("press_point_reset")
             }) { Text("Reset") }
         }
     }
@@ -504,7 +543,9 @@ private fun SpeedMethodPicker(prefs: android.content.SharedPreferences) {
 @Composable
 private fun BankSafeSection(on: Boolean, ready: Boolean, onToggle: (Boolean) -> Unit) {
     val ctx = LocalContext.current
-    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Usage.event("notif_permission", mapOf("granted" to granted.toString()))
+    }
     val usageOk = LaunchWatcher.hasUsageAccess(ctx)
     val secureOk = A11yToggle.canToggle(ctx)
     SettingRow(
@@ -529,7 +570,10 @@ private fun BankSafeSection(on: Boolean, ready: Boolean, onToggle: (Boolean) -> 
             Text("Needs two one-time permissions:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             CheckLine(usageOk, "Usage access, to notice Instagram opening") {
                 OutlinedButton(
-                    onClick = { ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
+                    onClick = {
+                        Usage.ui("usage_access_grant")
+                        ctx.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    },
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                 ) { Text("Grant") }
             }
@@ -544,6 +588,7 @@ private fun BankSafeSection(on: Boolean, ready: Boolean, onToggle: (Boolean) -> 
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
                         )
                         TextButton(onClick = {
+                            Usage.ui("adb_copy")
                             ctx.getSystemService(ClipboardManager::class.java)
                                 .setPrimaryClip(ClipData.newPlainText("adb command", cmd))
                         }) { Text("Copy") }
@@ -599,7 +644,7 @@ private fun UsageNotice(sharing: Boolean, onOk: () -> Unit, onTurnOff: () -> Uni
             Text("Anonymous usage sharing", style = MaterialTheme.typography.titleMedium)
             Text(
                 "ReelRein sends anonymous counts (how often the pause screen shows, reels and minutes per day, " +
-                    "which features you use, crashes) with a random id. Never what's on screen: no captions, " +
+                    "session lengths in ranges, which features and settings you use, errors and crashes) with a random id. Never what's on screen: no captions, " +
                     "accounts, messages or which reels. You can turn it off any time in Privacy below, and that " +
                     "deletes what was sent.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -617,10 +662,12 @@ private fun UsageNotice(sharing: Boolean, onOk: () -> Unit, onTurnOff: () -> Uni
 private fun UsageDetails() {
     Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val sent = listOf(
-            "Daily counts: Instagram opens, pause screens and what you chose, reels, minutes on Reels and in Instagram, time's up and reel-cap screens",
-            "Which features and settings you use (switch names, never values you typed) and your limit in ranges like 6–10 min",
-            "Setup steps reached, app version, Android version, phone model and language",
-            "Crashes: the error type and where in ReelRein's code, never screen text",
+            "Daily counts: Instagram opens, pause screens and what you chose at each step, reels, minutes on Reels and in Instagram, time's up and reel-cap screens",
+            "Sessions in ranges: how long, time on Reels, reels (like 6–20), whether a limit was set and how it ended; yesterday's totals and streaks the same way",
+            "Settings as fixed choices (on/off, \"Glass\", \"50\" reel cap), which buttons and sections of ReelRein you use, and your limit in ranges like 6–10 min",
+            "Whether ReelRein's own steps worked: 2× lock, Auto scroll, finding the Reels screen (as a category, like \"no reels seen\"), the accessibility service stopping or restarting",
+            "Setup steps reached, which permissions are granted (yes/no), app version, Android version, phone model and language",
+            "Crashes and errors: the error type and where in ReelRein's code, never screen text",
         )
         val never = listOf(
             "Anything on screen in Instagram: captions, comments, usernames, messages, which reels",

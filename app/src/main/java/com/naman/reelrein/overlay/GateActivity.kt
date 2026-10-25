@@ -131,6 +131,7 @@ object Gate {
                 android.content.Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
         )
         runCatching { ctx.startActivity(intent) }
+            .onFailure { com.naman.reelrein.telemetry.Usage.nonFatal("gate_open", it) }
     }
 }
 

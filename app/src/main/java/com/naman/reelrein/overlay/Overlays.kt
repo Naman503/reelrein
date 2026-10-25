@@ -31,6 +31,7 @@ import android.widget.TextView
 import com.naman.reelrein.HudConfig
 import com.naman.reelrein.IgSignatures
 import com.naman.reelrein.R
+import com.naman.reelrein.telemetry.Usage
 import kotlin.math.abs
 
 data class PauseInfo(
@@ -68,6 +69,7 @@ interface HudActions {
     fun onHide()
     fun onEndSession()
     fun onMoved(x: Int, y: Int)
+    fun onPanel(open: Boolean) {}
 }
 
 /**
@@ -105,6 +107,20 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     var haptics = true
 
     val fullShowing get() = fullView != null
+
+    /** Which full screen is up ("pause", "times_up", "brain_full", "change_limit") and its step, for usage counts. */
+    var fullKind: String? = null
+        private set
+    var fullStep: String? = null
+        private set
+    /** Called when a screen reaches a step (fixed words only). */
+    var onStep: (screen: String, step: String) -> Unit = { _, _ -> }
+
+    private fun step(kind: String, s: String) {
+        fullKind = kind
+        fullStep = s
+        onStep(kind, s)
+    }
     val hudShowing get() = hud != null
 
     // ---------------- Pause screen: breathe -> attempts -> dial ----------------
@@ -124,6 +140,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         onClose: () -> Unit,
     ) {
         val (root, content) = screen("Paused")
+        step("pause", "breathe")
         val stage = FrameLayout(ctx)
         content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
 
@@ -154,6 +171,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         }
 
         glass.onFinished = {
+            step("pause", "attempts")
             swapStage(stage, attemptsStage(
                 number = info.attempts24h,
                 label = if (info.attempts24h == 1) "attempt to open Instagram within the last 24 hours." else "attempts to open Instagram within the last 24 hours.",
@@ -163,6 +181,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
                 secondary = "Continue on Instagram",
                 secondaryLockMs = 0,
                 onSecondary = {
+                    step("pause", "dial")
                     swapStage(stage, dialStage(initialMinutes, "How much time do you need?", onStart, "Never mind, close Instagram", onClose, step = 3))
                 },
             ))
@@ -176,9 +195,11 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
 
     fun showTimesUp(info: TimesUpInfo, initialMinutes: Int, onStart: (minutes: Int) -> Unit, onClose: () -> Unit) {
         val (root, content) = screen("Time's up")
+        step("times_up", "times_up")
         val stage = FrameLayout(ctx)
         content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
         swapStage(stage, timesUpStage(info, onClose) {
+            step("times_up", "dial")
             swapStage(stage, dialStage(initialMinutes, "How much more time?", onStart, "Close Instagram", onClose))
         }, animate = false)
         showFull(root, content)
@@ -187,6 +208,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     /** Daily reel cap reached: the brain pal is fried. Close, or keep watching after a beat. */
     fun showBrainFull(reels: Int, cap: Int, info: TimesUpInfo, onClose: () -> Unit, onContinue: () -> Unit) {
         val (root, content) = screen("Brain full")
+        step("brain_full", "brain_full")
         val v = column()
         v.addView(spacer(), LinearLayout.LayoutParams(-1, 0, 0.6f))
         v.addView(BrainView(ctx).apply { mood = 3 }, centered(dp(170), dp(170)))
@@ -202,6 +224,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
     /** From the panel: pick a new limit mid-session (counted from now). */
     fun showChangeLimit(info: TimesUpInfo, initialMinutes: Int, onStart: (minutes: Int) -> Unit, onCancel: () -> Unit) {
         val (root, content) = screen("Session")
+        step("change_limit", "dial")
         val stage = FrameLayout(ctx)
         content.addView(stage, LinearLayout.LayoutParams(-1, 0, 1f))
         swapStage(stage, dialStage(initialMinutes, "Change your limit", onStart, "Keep my current limit", onCancel,
@@ -416,7 +439,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        runCatching { wm.addView(v, lp) }.onSuccess { cover = v }
+        runCatching { wm.addView(v, lp) }.onSuccess { cover = v }.onFailure { Usage.nonFatal("cover_add", it) }
     }
 
     fun hideCover() {
@@ -433,6 +456,8 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
         fullAnimators.clear()
         if (fullView == null) return
         fullView = null
+        fullKind = null
+        fullStep = null
         Gate.close()
         onFullHidden()
     }
@@ -807,7 +832,11 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
                             when (config.tap) {
                                 "speed" -> actions.onSpeedLock(!(views.state?.speedLockOn ?: false))
                                 "nothing" -> Unit
-                                else -> setPanel(views, panel.visibility != View.VISIBLE)
+                                else -> {
+                                    val open = panel.visibility != View.VISIBLE
+                                    setPanel(views, open)
+                                    actions.onPanel(open)
+                                }
                             }
                         }
                     }
@@ -821,7 +850,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
             false
         }
 
-        runCatching { wm.addView(root, lp) }.onSuccess {
+        runCatching { wm.addView(root, lp) }.onFailure { Usage.nonFatal("pill_add", it) }.onSuccess {
             hud = views
             wake(views)
         }
@@ -983,7 +1012,7 @@ class Overlays(private val service: AccessibilityService, private val onFullShow
                     layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
                 }
             }
-            runCatching { wm.addView(v, lp) }.onSuccess { cancelPad = v }
+            runCatching { wm.addView(v, lp) }.onSuccess { cancelPad = v }.onFailure { Usage.nonFatal("cancel_pad_add", it) }
         }
         return PointF(1f, 1f)
     }
