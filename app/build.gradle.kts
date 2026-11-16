@@ -41,8 +41,8 @@ android {
         applicationId = "com.naman.reelrein"
         minSdk = 26 // StrokeDescription.continueStroke (the held 2x press) needs API 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
     }
 
     signingConfigs {
