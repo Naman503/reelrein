@@ -25,7 +25,7 @@ import android.os.Process
  * see no accessibility service from ReelRein. This small foreground service notices Instagram
  * coming to the front and switches the accessibility service back on.
  *
- * Cost: one in-memory usage-events query every 0.8 s, and only while the screen is on.
+ * Cost: one in-memory usage-events query every 0.3 s, and only while the screen is on.
  */
 class LaunchWatcher : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -122,7 +122,7 @@ class LaunchWatcher : Service() {
     companion object {
         private const val CHANNEL = "bank_safe"
         private const val NOTIFICATION_ID = 7
-        private const val POLL_MS = 800L
+        private const val POLL_MS = 300L
 
         fun hasUsageAccess(ctx: Context): Boolean {
             val ops = ctx.getSystemService(AppOpsManager::class.java)

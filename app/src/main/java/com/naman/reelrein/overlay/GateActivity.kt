@@ -3,7 +3,6 @@ package com.naman.reelrein.overlay
 import android.app.Activity
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -83,12 +82,14 @@ class GateActivity : ComponentActivity() {
         if (!isFinishing) Gate.onLeave?.invoke()
     }
 
-    /** Covered by another app (e.g. opened from a notification). Screen-off doesn't count. */
+    /**
+     * Covered by something (another app, control centre, the lock screen). The screen stays
+     * open; the service checks what's really in front and decides.
+     */
     override fun onStop() {
         super.onStop()
-        val screenOn = getSystemService(PowerManager::class.java)?.isInteractive != false
-        Gate.log("stop (finishing=$isFinishing, screenOn=$screenOn)")
-        if (!isFinishing && !isChangingConfigurations && screenOn) Gate.onLeave?.invoke()
+        Gate.log("stop (finishing=$isFinishing)")
+        if (!isFinishing) Gate.onLeave?.invoke()
     }
 
     override fun onDestroy() {

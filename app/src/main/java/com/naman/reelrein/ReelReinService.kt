@@ -82,7 +82,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             screenLeft("back")
             if (igInFront) closeInstagram(endedBy()) else overlays.hideFull()
         }
-        Gate.onLeave = { onGateLeft() }
+        Gate.onLeave = { scheduleReconcile(RECONCILE_MS) }
         Gate.onResumed = {
             // Lift the cover once the pause screen has been in front for a moment.
             handler.removeCallbacks(dropCover)
@@ -97,7 +97,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             onChanged = { refreshHud() },
             cancelPoint = { if (igInFront) overlays.ensureCancelPad() else null },
             log = { m -> debug { m } },
-            lockConfirmed = { visibleText(IgSignatures.TOAST_LOCKED) },
+            lockConfirmed = { now() - lockToastAt < 2_500 || visibleText(IgSignatures.TOAST_LOCKED, anyApp = true) },
             onResult = ::onLockResult,
         )
         autoScroll = AutoScroll(this, handler) { m -> debug { m } }
@@ -106,9 +106,54 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         connected = true
         instanceRef = WeakReference(this)
         setListening(false)
-        // Bank-safe mode switches us on because Instagram just opened: catch up right away.
-        handler.postDelayed({ if (!igInFront && instagramOnTop()) enterInstagram() }, 120)
+        registerReceiver(screenReceiver, android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_USER_PRESENT)
+            addAction(android.content.Intent.ACTION_DREAMING_STARTED)
+            addAction(android.content.Intent.ACTION_DREAMING_STOPPED)
+        })
+        // Bank-safe mode switches us on because Instagram just opened: cover it this instant,
+        // then catch up.
+        if (!keyguardLocked() && topAppPackage() == IgSignatures.PACKAGE && pauseNeededOnEnter()) overlays.showCover()
+        scheduleReconcile(0)
     }
+
+    // ---------------- screen lock ----------------
+    // Locking the phone isn't leaving Instagram. While the screen is off or locked, nothing
+    // is decided; on unlock, the time away is compared with the re-lock time.
+
+    private var lockToastAt = 0L
+    private var screenLocked = false
+    private var awaySince = 0L
+
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+            when (i.action) {
+                android.content.Intent.ACTION_SCREEN_OFF, android.content.Intent.ACTION_DREAMING_STARTED -> {
+                    debug { if (i.action == android.content.Intent.ACTION_SCREEN_OFF) "screen off" else "screensaver on" }
+                    screenLocked = true
+                    if (igInFront && awaySince == 0L) {
+                        accrue()
+                        flushTime()
+                        awaySince = now()
+                        speed.forget()
+                        handler.removeCallbacks(engage)
+                    }
+                }
+                android.content.Intent.ACTION_SCREEN_ON, android.content.Intent.ACTION_USER_PRESENT,
+                android.content.Intent.ACTION_DREAMING_STOPPED -> {
+                    if (keyguardLocked()) return
+                    debug { "unlocked" }
+                    screenLocked = false
+                    scheduleReconcile(RECONCILE_MS)
+                }
+            }
+        }
+    }
+
+    private fun keyguardLocked() =
+        getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (!connected) return
@@ -118,12 +163,15 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> if (igInFront && pkg == IgSignatures.PACKAGE) onScrolled(e)
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> if (igInFront && pkg == IgSignatures.PACKAGE) scheduleSurfaceCheck(600)
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ->
+                if (pkg == IgSignatures.PACKAGE && e.text.any { it.contains(IgSignatures.TOAST_LOCKED) }) lockToastAt = now()
         }
     }
 
     override fun onInterrupt() = Usage.count("a11y_interrupt")
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
         getSharedPreferences("runtime", MODE_PRIVATE).edit().putBoolean(RT_ALIVE, false).apply()
         Usage.count("a11y_disconnected", props = mapOf("reason" to if (sleepingOnPurpose) "bank_safe_sleep" else "stopped"))
         if (connected) {
@@ -141,42 +189,107 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
     private fun onWindowChanged(pkg: String, e: AccessibilityEvent) {
         debug { "window pkg=$pkg cls=${e.className}" }
+        if (screenLocked || keyguardLocked()) return // locked: decide on unlock
+        // Fast path: Instagram just appeared and will need the pause screen. Cover it this
+        // frame; the decision itself happens in reconcile() a moment later.
+        if (pkg == IgSignatures.PACKAGE && !igInFront && !overlays.fullShowing && pauseNeededOnEnter()) {
+            overlays.showCover()
+        }
+        if (pkg == IgSignatures.PACKAGE && igInFront) scheduleSurfaceCheck(400)
+        scheduleReconcile(RECONCILE_MS)
+    }
+
+    private fun scheduleReconcile(delay: Long) {
+        handler.removeCallbacks(reconcile)
+        handler.postDelayed(reconcile, delay)
+    }
+
+    /**
+     * The one place that decides what's going on, from which app window is really in front
+     * (not from the stream of window events, which on vivo includes volume popups, control
+     * centre, Discover and fingerprint screens in odd orders).
+     */
+    private val reconcile = Runnable {
+        if (screenLocked || keyguardLocked()) return@Runnable
+        val top = topAppPackage()
         when {
-            pkg == IgSignatures.PACKAGE -> {
-                handler.removeCallbacks(verifyLeft)
-                // Instagram jumped back above the pause screen (it finishes launching after
-                // we open): hide it again and put the pause screen back in front.
-                if (overlays.fullShowing && !Gate.resumed) {
-                    overlays.showCover()
-                    Gate.open(this)
+            top == IgSignatures.PACKAGE -> when {
+                !igInFront -> enterInstagram()
+                awaySince > 0 -> backFromLock()
+                // Instagram popped above the pause screen (it finishes launching after we open).
+                overlays.fullShowing && !Gate.resumed -> {
+                    if (now() - lastGateOpen > GATE_REOPEN_MS) {
+                        debug { "pause screen back to front" }
+                        Usage.count("gate_reopened")
+                        overlays.showCover()
+                        Gate.open(this)
+                        lastGateOpen = now()
+                    }
                 }
-                if (!igInFront) enterInstagram() else scheduleSurfaceCheck(400)
+                !overlays.fullShowing -> overlays.hideCover()
             }
-            pkg == packageName || pkg in IgSignatures.TRANSIENT_PACKAGES || pkg == imePackage() -> Unit
-            // Another app's window appeared. It may only be a popup or overlay on top of
-            // Instagram (One Sec, chat heads, call screens), so check before treating it as leaving.
-            igInFront -> {
-                handler.removeCallbacks(verifyLeft)
-                handler.postDelayed(verifyLeft, 250)
+            top == packageName -> Unit // the pause screen or ReelRein's own settings
+            top == null -> Unit
+            else -> {
+                overlays.hideCover()
+                if (igInFront) {
+                    debug { "left Instagram for $top" }
+                    val fromPause = overlays.fullShowing
+                    if (fromPause) screenLeft("home")
+                    overlays.hideFull()
+                    val s = state.session
+                    if (fromPause && (s == null || s.timesUpShown)) {
+                        s?.let { reportSessionEnd(it, "times_up") }
+                        state.session = null
+                    }
+                    leaveInstagram()
+                    if (fromPause && state.session == null) killInstagramSoon()
+                } else if (overlays.fullShowing) {
+                    overlays.hideFull() // a preview, left by going elsewhere
+                }
             }
         }
     }
 
-    private val verifyLeft = Runnable {
-        if (igInFront && !instagramOnTop()) leaveInstagram()
+    private var lastGateOpen = 0L
+
+    /** Back after the screen was off: continue, or a new session if away longer than the re-lock time. */
+    private fun backFromLock() {
+        val away = now() - awaySince
+        awaySince = 0L
+        debug { "back from lock after ${away / 1000}s" }
+        lastTick = now()
+        if (overlays.fullShowing) {
+            if (!Gate.resumed) Gate.open(this)
+            return
+        }
+        if (away >= relockMs() && prefs.getBoolean(Keys.INTERCEPT, true)) {
+            overlays.showCover()
+            startNewOpen()
+        } else {
+            refreshHud()
+            scheduleSurfaceCheck(400)
+            waitingForNextReel = false
+            scheduleEngage(SETTLE_MS + 300)
+        }
     }
 
-    /** True when the app window the user is looking at belongs to Instagram. */
-    private fun instagramOnTop(): Boolean {
+    /** Will opening Instagram right now show the pause screen? */
+    private fun pauseNeededOnEnter(): Boolean =
+        prefs.getBoolean(Keys.INTERCEPT, true) && !(state.session != null && now() - state.lastLeftAt < relockMs())
+
+    /** The package of the app window that's really in front (null if unknown). */
+    private fun topAppPackage(): String? {
         val apps = runCatching { windows }.getOrNull().orEmpty()
             .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
         if (apps.isEmpty()) {
             Usage.count("detect_issue", props = mapOf("kind" to "no_windows"))
-            return rootInActiveWindow?.packageName?.toString() == IgSignatures.PACKAGE
+            return rootInActiveWindow?.packageName?.toString()
         }
         val top = apps.firstOrNull { it.isActive } ?: apps.maxByOrNull { it.layer }
-        return top?.root?.packageName?.toString() == IgSignatures.PACKAGE
+        return top?.root?.packageName?.toString()
     }
+
 
     private fun enterInstagram() {
         handler.removeCallbacks(sleep)
@@ -189,12 +302,19 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         if (state.session != null && now() - state.lastLeftAt < relockMs()) {
             // Came back quickly (share sheet, notification, app switch): same session.
             Usage.count("session_resumed")
+            debug { "enter Instagram: same session" }
+            overlays.hideCover()
             overlays.ensureCancelPad()
             scheduleSurfaceCheck(500)
             refreshHud()
             return
         }
+        startNewOpen()
+    }
 
+    /** A fresh open of Instagram: count it and show the pause screen (or start straight away). */
+    private fun startNewOpen() {
+        debug { "enter Instagram: new open" }
         state.session?.let { reportSessionEnd(it, "left") } // away longer than the re-pause time
         state.session = null
         state.autoScrollDone = false
@@ -202,19 +322,27 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         counter.reset()
         stats.addOpen()
         Usage.count("instagram_opened")
-        if (prefs.getBoolean(Keys.INTERCEPT, true)) showPause() else startSession(null)
+        if (prefs.getBoolean(Keys.INTERCEPT, true)) {
+            showPause()
+            lastGateOpen = now()
+        } else {
+            overlays.hideCover()
+            startSession(null)
+        }
     }
 
     private fun leaveInstagram() {
         if (!igInFront) return
+        debug { "leave Instagram" }
         accrue()
         flushTime()
         igInFront = false
-        state.lastLeftAt = now()
+        // Locked, then unlocked straight into another app: the time away started at the lock.
+        state.lastLeftAt = if (awaySince > 0) awaySince else now()
+        awaySince = 0L
         handler.removeCallbacks(tick)
         handler.removeCallbacks(surfaceCheck)
         handler.removeCallbacks(engage)
-        handler.removeCallbacks(verifyLeft)
         speed.forget()
         setOnReels(false)
         overlays.hideAll()
@@ -248,7 +376,8 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
                 AccessibilityEvent.TYPE_VIEW_SCROLLED or
                 AccessibilityEvent.TYPE_VIEW_CLICKED or
-                AccessibilityEvent.TYPE_VIEW_LONG_CLICKED
+                AccessibilityEvent.TYPE_VIEW_LONG_CLICKED or
+                AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED // toasts ("Locked at 2x speed")
         } else {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         }
@@ -279,6 +408,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
                 rememberMinutes(minutes)
                 Usage.count("pause_result", props = mapOf("choice" to "opened"))
                 Usage.count("limit_chosen", props = mapOf("minutes" to Buckets.limitMinutes(minutes)))
+                ackReelCapIfReached() // the pause screen already showed today's reels and the fried brain
                 startSession(minutes * 60_000L)
                 backToInstagram()
             },
@@ -414,37 +544,6 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
 
     private val dropCover = Runnable { if (Gate.resumed) overlays.hideCover() }
 
-    /**
-     * The pause screen went to the background. If that's Instagram popping back on top
-     * (it finishes launching after we open), put the pause screen back. If it's Home or
-     * another app, treat it as closing Instagram.
-     */
-    private fun onGateLeft() {
-        if (!overlays.fullShowing) return
-        handler.removeCallbacks(checkGateLeft)
-        handler.postDelayed(checkGateLeft, 250)
-    }
-
-    private val checkGateLeft = Runnable {
-        if (!overlays.fullShowing || Gate.resumed) return@Runnable
-        if (igInFront && instagramOnTop()) {
-            Usage.count("gate_reopened")
-            overlays.showCover()
-            Gate.open(this)
-            return@Runnable
-        }
-        if (igInFront) screenLeft("home")
-        overlays.hideFull()
-        if (!igInFront) return@Runnable // a preview from the settings screen
-        val s = state.session
-        if (s == null || s.timesUpShown) {
-            s?.let { reportSessionEnd(it, "times_up") }
-            state.session = null
-            leaveInstagram()
-            killInstagramSoon()
-        }
-    }
-
     /** "12m less on Reels than yesterday so far" (compares with yesterday up to this time). */
     private fun comparison(): String? {
         val today = stats.day()
@@ -467,11 +566,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             if (s != null && limit != null && !s.timesUpShown && s.usedMs >= limit) showTimesUp(s)
             if (pendingMs >= FLUSH_MS) flushTime()
             // Safety net for a missed "left Instagram" event.
-            if (++ticks % 5 == 0 && !overlays.fullShowing && !instagramOnTop()) {
-                Usage.count("detect_issue", props = mapOf("kind" to "missed_leave"))
-                leaveInstagram()
-                return
-            }
+            if (++ticks % 5 == 0) scheduleReconcile(0) // safety net for a missed change
             refreshHud()
             handler.postDelayed(this, 1_000)
         }
@@ -483,7 +578,7 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         val d = t - lastTick
         lastTick = t
         val s = state.session ?: return
-        if (overlays.fullShowing || d <= 0) return
+        if (overlays.fullShowing || d <= 0 || screenLocked || awaySince > 0) return // locked time doesn't count
         s.usedMs += d
         pendingMs += d
         if (onReels) {
@@ -559,13 +654,14 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
     /**
      * A visible, on-screen node in any Instagram window containing [text] (Instagram's own UI
      * labels only). All windows, because toasts like "Locked at 2x speed" live in their own.
+     * [anyApp]: on Android 12+ a plain text toast is drawn by System UI, not by Instagram.
      */
-    private fun visibleText(text: String): Boolean {
+    private fun visibleText(text: String, anyApp: Boolean = false): Boolean {
         val h = screenHeight()
         val r = Rect()
         val roots = runCatching { windows }.getOrNull().orEmpty().mapNotNull { it.root }
             .ifEmpty { listOfNotNull(rootInActiveWindow) }
-            .filter { it.packageName?.toString() == IgSignatures.PACKAGE }
+            .filter { anyApp || it.packageName?.toString() == IgSignatures.PACKAGE }
         return roots.any { root ->
             root.findAccessibilityNodeInfosByText(text).any { n ->
                 n.getBoundsInScreen(r)
@@ -634,6 +730,15 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
             },
         )
         refreshHud()
+    }
+
+    /** Over the cap already: count it as seen, so the brain-full screen doesn't follow right after. */
+    private fun ackReelCapIfReached() {
+        val cap = prefs.getInt(Keys.REEL_CAP, 0)
+        val today = stats.day()
+        if (cap <= 0 || today.reels < cap) return
+        getSharedPreferences("runtime", MODE_PRIVATE).edit()
+            .putString("cap_ack_day", today.date.toString()).putInt("cap_ack_reels", today.reels).apply()
     }
 
     private fun brainMood(): Int = com.naman.reelrein.overlay.BrainView.moodFor(stats.day().reels, prefs.getInt(Keys.REEL_CAP, 0))
@@ -999,6 +1104,8 @@ class ReelReinService : AccessibilityService(), SharedPreferences.OnSharedPrefer
         private const val KILL_DELAY_MS = 1_200L
         private const val CAP_REMIND_EVERY = 25
         private const val COVER_SETTLE_MS = 450L
+        private const val RECONCILE_MS = 250L
+        private const val GATE_REOPEN_MS = 1_200L
         private const val KILL_RETRY_MS = 60_000L
         private const val LOCK_SLIDE_FRACTION = 0.14f // how far the lock gesture slides
         private const val ESCALATE_STEP_S = 3

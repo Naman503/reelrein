@@ -65,21 +65,27 @@ class AutoScroll(
 
     private fun toggle(label: AccessibilityNodeInfo?, want: Boolean, done: (Boolean?) -> Unit) {
         if (label == null) return finish(2, null, "no Auto scroll item", done, "no_item")
-        val row = clickableAncestor(label) ?: label
-        val switch = findToggle(row) ?: findToggle(label.parent)
-        val on = switch?.isChecked ?: return finish(2, null, "can't read the switch", done, "no_switch")
-        log("auto scroll: switch ${describe(switch)}; row ${describe(row)}")
-        if (on == want) return finish(2, on, "already ${if (on) "on" else "off"}", done, "already")
-        // Tap the toggle like a finger would, then read it again before deciding anything.
-        tapCenter(switch)
-        handler.postDelayed({
-            val now = readSwitch()
-            finish(2, now, if (now == want) "switched" else "tap didn't take (now $now)", done, if (now == want) "switched" else "tap_failed")
-        }, VERIFY_MS)
+        // The sheet is still sliding in when its items first appear: let it settle before tapping.
+        handler.postDelayed({ flip(want, attempt = 1, done) }, SETTLE_MS)
     }
 
-    private fun readSwitch(): Boolean? =
-        exact(IgSignatures.MENU_AUTO_SCROLL)?.let { findToggle(clickableAncestor(it) ?: it) ?: findToggle(it.parent) }?.isChecked
+    private fun currentSwitch(): AccessibilityNodeInfo? =
+        exact(IgSignatures.MENU_AUTO_SCROLL)?.let { findToggle(clickableAncestor(it) ?: it) ?: findToggle(it.parent) }
+
+    /** Tap the toggle like a finger would (then, on a retry, click it directly) and read it again. */
+    private fun flip(want: Boolean, attempt: Int, done: (Boolean?) -> Unit) {
+        val switch = currentSwitch() ?: return finish(2, null, "can't read the switch", done, "no_switch")
+        val on = switch.isChecked
+        if (attempt == 1) log("auto scroll: switch ${describe(switch)}")
+        if (on == want) {
+            return if (attempt == 1) finish(2, on, "already ${if (on) "on" else "off"}", done, "already")
+            else finish(2, on, "switched", done, if (attempt == 2) "switched" else "switched_retry")
+        }
+        if (attempt > 2) return finish(2, on, "tap didn't take (now $on)", done, "tap_failed")
+        if (attempt == 1) tapCenter(switch) else switch.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        handler.postDelayed({ flip(want, attempt + 1, done) }, VERIFY_MS)
+    }
+
 
     /**
      * Close the menus we opened: Back only while one of Instagram's menu items is still on
@@ -198,6 +204,7 @@ class AutoScroll(
         const val WAIT_MS = 2_000L
         const val POLL_MS = 150L
         const val VERIFY_MS = 600L
+        const val SETTLE_MS = 450L
         const val BACK_MS = 350L
         const val MAX_NODES = 1_500
     }

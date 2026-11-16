@@ -155,7 +155,7 @@ It makes one attempt per session. If anything isn't where it expects, it backs o
 - **Last 7 days:** a bar chart of reels watched or time on Reels.
 
 ### Bank-safe mode (optional)
-Some banking apps refuse to open while *any* accessibility service is on. Android can't hide a service from other apps, so ReelRein switches its own service **off** 5 s after you leave Instagram. A tiny watcher switches it back on the moment Instagram opens. The watcher checks recent app launches every 0.8 s, and only while the screen is on.
+Some banking apps refuse to open while *any* accessibility service is on. Android can't hide a service from other apps, so ReelRein switches its own service **off** 5 s after you leave Instagram. A tiny watcher switches it back on the moment Instagram opens. The watcher checks recent app launches every 0.3 s, and only while the screen is on.
 
 The trade-off: Instagram may be visible for about a second before the pause screen covers it.
 
